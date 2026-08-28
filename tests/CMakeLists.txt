@@ -10,6 +10,7 @@ include(Catch)
 
 add_executable(vrp_tests
   test_smoke.cpp
+  test_rng.cpp
 )
 target_link_libraries(vrp_tests PRIVATE vrp_core Catch2::Catch2WithMain)
 target_link_libraries(vrp_tests PRIVATE vrp_warnings)
