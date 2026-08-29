@@ -13,6 +13,7 @@ add_executable(vrp_tests
   test_rng.cpp
   test_problem.cpp
   test_executor.cpp
+  test_population.cpp
 )
 target_link_libraries(vrp_tests PRIVATE vrp_core Catch2::Catch2WithMain)
 target_link_libraries(vrp_tests PRIVATE vrp_warnings)
