@@ -36,3 +36,6 @@ build/
 
 # CMake
 CMakeUserPresets.json
+
+# Editor and language-server caches
+.cache/

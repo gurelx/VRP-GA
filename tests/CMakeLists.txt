@@ -12,9 +12,13 @@ add_executable(vrp_tests
   test_smoke.cpp
   test_rng.cpp
   test_problem.cpp
+  test_executor.cpp
 )
 target_link_libraries(vrp_tests PRIVATE vrp_core Catch2::Catch2WithMain)
 target_link_libraries(vrp_tests PRIVATE vrp_warnings)
 
 get_filename_component(VRP_COMPILER_DIR "${CMAKE_CXX_COMPILER}" DIRECTORY)
-catch_discover_tests(vrp_tests DL_PATHS "${VRP_COMPILER_DIR}")
+# TIMEOUT so that a wedged thread pool fails fast and by name. A lost wakeup, a
+# missed decrement and an outstanding_ underflow are all detectable only as a
+# hang, and CTest's default would sit on each one for 1500 s.
+catch_discover_tests(vrp_tests DL_PATHS "${VRP_COMPILER_DIR}" PROPERTIES TIMEOUT 60)
