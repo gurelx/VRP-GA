@@ -388,10 +388,16 @@ TEST_CASE("steady state offspring follows the specified seeding and replacement"
     }
 }
 
-TEST_CASE("strategies schedule at most one parallelFor per generation", "[strategy]") {
+TEST_CASE("generational schedules one parallelFor per generation and steady-state none",
+          "[strategy]") {
     // Granularity is a correctness-adjacent property that no output check can
     // see: scheduling per child computes the same population and pays a
     // condition-variable round trip per individual.
+    //
+    // The assertions below are equalities, not upper bounds, and the name says
+    // so: "at most one" would also be satisfied by a strategy that scheduled
+    // nothing at all, which for the generational case would mean the offspring
+    // loop had stopped going through the executor entirely.
     const vrp::Problem problem = vrp::Problem::defaultInstance();
     vrp::GaParams params = smallParams();
     params.populationSize = 40;

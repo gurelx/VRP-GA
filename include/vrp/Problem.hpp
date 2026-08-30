@@ -1,5 +1,26 @@
 #pragma once
 
+// <cassert> in a public header has two costs a consumer inherits whether they
+// want them or not, both accepted here deliberately rather than overlooked:
+//
+//  1. It defines the `assert` MACRO in every translation unit that includes
+//     this header, so a consumer with an identifier or member named `assert`
+//     will not compile. There is no way to keep the inline bounds checks below
+//     and avoid this.
+//
+//  2. distance() is an inline function whose body VARIES WITH NDEBUG. If two
+//     translation units in one program include this header with different
+//     NDEBUG states -- an optimised library linked against a debug consumer, or
+//     a single target that defines NDEBUG in only some of its sources -- they
+//     emit two different definitions of the same inline function and the
+//     linker keeps one arbitrarily. That is an ODR violation, not merely a
+//     surprise about which checks run. It is latent rather than active: the
+//     whole project is built one configuration at a time by the presets, so no
+//     mixed-NDEBUG link exists today. Anyone adding a consumer with its own
+//     build flags must keep NDEBUG consistent across the link.
+//
+// Do not "fix" this by making distance() non-inline; the assert-free lookup in
+// the hot loop is the point of the precomputed matrix.
 #include <cassert>
 #include <cstddef>
 #include <span>

@@ -24,6 +24,12 @@ std::uint64_t mixSeed(std::uint64_t base, std::uint64_t a, std::uint64_t b) noex
 class Rng {
 public:
     explicit Rng(std::uint64_t seed) noexcept;
+
+    // Adopts raw generator words. The all-zero state is xoshiro's fixed point
+    // -- it would emit 0 forever -- so it is silently replaced with a fixed
+    // non-zero state rather than honoured. fromState({}) therefore does NOT
+    // round-trip: it yields a working generator, not a zero one. Every other
+    // state is adopted verbatim.
     static Rng fromState(std::array<std::uint64_t, 4> state) noexcept;
 
     std::uint64_t next() noexcept;

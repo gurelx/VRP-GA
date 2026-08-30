@@ -11,6 +11,11 @@
 #include "vrp/Problem.hpp"
 #include "vrp/Solver.hpp"
 #include "vrp/Strategy.hpp"
+#include "SolverTrace.hpp"
+
+using vrp_test::kindName;
+using vrp_test::referenceTrace;
+using vrp_test::Trace;
 
 // ---------------------------------------------------------------------------
 // The determinism suite, at the Solver layer.
@@ -88,59 +93,20 @@ vrp::GaParams determinismParams(std::uint64_t seed, vrp::StrategyKind kind) {
     return params;
 }
 
-const char* kindName(vrp::StrategyKind kind) {
-    return kind == vrp::StrategyKind::SteadyState ? "steady-state" : "generational";
-}
-
-// Everything one Solver run can be observed to produce. The per-generation
-// `best` sequence is the only window Solver offers onto the intermediate
-// populations, and it is what makes this comparison stronger than RunResult
-// alone: a run that diverged at generation 3 and reconverged by generation 24
-// agrees on bestRoute and dies here.
-struct Trace {
-    std::vector<std::size_t> generations;
-    std::vector<double> best;
-    std::vector<int> bestRoute;
-    double bestDistance = 0.0;
-    std::size_t generationsRun = 0;
-};
-
-// A serial generation loop kept separate from Solver's own, so that a defect
-// inside Solver::run's loop -- an off-by-one, a report issued before the step
-// instead of after, the wrong generation index handed to the strategy -- cannot
-// cancel out of the comparison by appearing identically on both sides.
+// `Trace`, `referenceTrace` and `kindName` come from SolverTrace.hpp, shared
+// with tests/test_solver.cpp, which uses the same oracle for the same purpose
+// at threads = 1. They were byte-identical copies in the two files until Task
+// 11 extracted them; the drift hazard the old comment here warned about is
+// gone, and the header carries the note that one edit now retunes both suites.
 //
-// It is NOT independent of the library, and the comment it replaced wrongly
-// said it was. It calls the same Population constructor and the same
+// What matters for reading this file: referenceTrace is a serial generation
+// loop kept separate from Solver's own, so that a defect inside Solver::run's
+// loop -- an off-by-one, a report issued before the step instead of after, the
+// wrong generation index handed to the strategy -- cannot cancel out of the
+// comparison by appearing identically on both sides. It is NOT independent of
+// the library: it calls the same Population constructor and the same
 // EvolutionStrategy::step as the code under test, so it is a differential
 // oracle over Solver's LOOP, not a restatement of the specified computation.
-//
-// DUPLICATION, DELIBERATE AND LOAD-BEARING: `Trace`, `referenceTrace` and
-// `kindName` are byte-identical to the helpers in tests/test_solver.cpp, which
-// uses them for the same purpose at threads = 1. They are copied rather than
-// shared so that one edit cannot silently retune both files' oracles at once;
-// the price is that the two copies can drift apart unnoticed. If you change
-// one, change the other, or extract both into a shared test-support header.
-Trace referenceTrace(const vrp::Problem& problem, const vrp::GaParams& params,
-                     vrp::StrategyKind kind) {
-    auto executor = vrp::makeExecutor(1);
-    auto strategy = vrp::makeStrategy(kind);
-    vrp::Population population(params.populationSize, problem, params.seed, *executor);
-
-    Trace trace;
-    for (std::size_t generation = 0; generation < params.generations; ++generation) {
-        strategy->step(generation, population, problem, params, *executor);
-        trace.generations.push_back(generation);
-        trace.best.push_back(population.fitness(population.bestIndex()));
-    }
-    trace.generationsRun = params.generations;
-
-    const std::size_t best = population.bestIndex();
-    const std::span<const int> route = population.route(best);
-    trace.bestRoute.assign(route.begin(), route.end());
-    trace.bestDistance = population.fitness(best);
-    return trace;
-}
 
 Trace solverTrace(const vrp::Problem& problem, const vrp::GaParams& params,
                   vrp::StrategyKind kind, std::size_t threads) {

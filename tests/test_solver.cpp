@@ -5,7 +5,6 @@
 #include <limits>
 #include <memory>
 #include <numeric>
-#include <span>
 #include <thread>
 #include <utility>
 #include <vector>
@@ -15,6 +14,11 @@
 #include "vrp/Problem.hpp"
 #include "vrp/Solver.hpp"
 #include "vrp/Strategy.hpp"
+#include "SolverTrace.hpp"
+
+using vrp_test::kindName;
+using vrp_test::referenceTrace;
+using vrp_test::Trace;
 
 namespace {
 
@@ -24,10 +28,6 @@ vrp::GaParams smallParams() {
     params.generations = 40;
     params.seed = 2024;
     return params;
-}
-
-const char* kindName(vrp::StrategyKind kind) {
-    return kind == vrp::StrategyKind::SteadyState ? "steady-state" : "generational";
 }
 
 // A six-point instance that is emphatically not Problem::defaultInstance():
@@ -77,42 +77,11 @@ private:
     std::vector<std::size_t> itemCounts_;
 };
 
-// Everything one run can be observed to produce, so a comparison covers the
-// whole contract rather than the one field a mutant happened to leave alone.
-struct Trace {
-    std::vector<std::size_t> generations;  // as reported to the callback
-    std::vector<double> best;              // best distance as reported, per generation
-    std::vector<int> bestRoute;
-    double bestDistance = 0.0;
-    std::size_t generationsRun = 0;
-};
-
-// A hand-run generation loop, sharing no code with Solver: build the population
-// from the seed, apply the strategy exactly `generations` times, and record the
-// incumbent best AFTER each step. A loop that steps once too often or too few
-// times, one that reports before stepping instead of after, or one that hands
-// the strategy the wrong generation index all diverge from this.
-Trace referenceTrace(const vrp::Problem& problem, const vrp::GaParams& params,
-                     vrp::StrategyKind kind) {
-    auto executor = vrp::makeExecutor(1);
-    auto strategy = vrp::makeStrategy(kind);
-    vrp::Population population(params.populationSize, problem, params.seed, *executor);
-
-    Trace trace;
-    for (std::size_t generation = 0; generation < params.generations; ++generation) {
-        strategy->step(generation, population, problem, params, *executor);
-        trace.generations.push_back(generation);
-        trace.best.push_back(population.fitness(population.bestIndex()));
-    }
-    trace.generationsRun = params.generations;
-
-    const std::size_t best = population.bestIndex();
-    const std::span<const int> route = population.route(best);
-    trace.bestRoute.assign(route.begin(), route.end());
-    trace.bestDistance = population.fitness(best);
-    return trace;
-}
-
+// `Trace`, `referenceTrace` and `kindName` live in SolverTrace.hpp, shared with
+// tests/test_determinism.cpp, which uses the same oracle as the serial
+// reference for its threaded runs. `solverTrace` stays here: this file drives a
+// caller-owned Solver, so that "running the same solver twice reproduces the
+// run" can issue two runs against one instance and its carried scratch.
 Trace solverTrace(vrp::Solver& solver) {
     Trace trace;
     const vrp::RunResult result =

@@ -17,7 +17,8 @@
       "binaryDir": "${sourceDir}/build/release",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
-        "VRP_BUILD_TESTS": "ON"
+        "VRP_BUILD_TESTS": "ON",
+        "VRP_WARNINGS_AS_ERRORS": "ON"
       }
     }
   ],

@@ -20,6 +20,10 @@ add_executable(vrp_tests
   test_determinism.cpp
   test_cli.cpp
   test_reporter.cpp
+  # Header-only test support shared by test_solver.cpp and test_determinism.cpp.
+  # Listed so it shows up in IDE and language-server file lists; CMake does not
+  # compile it.
+  SolverTrace.hpp
 )
 target_link_libraries(vrp_tests PRIVATE vrp_core vrp_app Catch2::Catch2WithMain)
 target_link_libraries(vrp_tests PRIVATE vrp_warnings)

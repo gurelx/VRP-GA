@@ -20,9 +20,21 @@ namespace vrp::ops {
 //    bit-identity still holds. But nothing downstream may assume one next() per
 //    below(), or count raw next() calls to predict a stream position.
 //
-//  - Draw counts per operator, each pinned by a test in tests/test_operators.cpp
-//    that runs a mirror generator forward and compares stream positions:
-//      tournamentSelect  exactly max(tournamentSize, 1) below() calls;
+//  - Draw counts per operator. Most are pinned by a test in
+//    tests/test_operators.cpp that runs a mirror generator forward and compares
+//    stream positions; the exception is called out below.
+//      tournamentSelect  exactly max(tournamentSize, 1) below() calls. Stream-
+//                        pinned for tournamentSize in {1, 2, 5, 16} only. The
+//                        tournamentSize == 0 case is covered solely by
+//                        "tournament selection treats size zero as a single
+//                        draw", which compares the RETURNED INDEX against one
+//                        mirror draw and never inspects the generator
+//                        afterwards. An implementation that returned the right
+//                        index and then consumed extra draws would pass it, so
+//                        the one-draw count for size 0 is documented here and
+//                        asserted nowhere. Nothing in the library reaches it --
+//                        the CLI rejects --tournament 0 -- but a caller that
+//                        did would not get stream alignment for free.
 //      orderCrossover    exactly two below(n) calls, on every path;
 //      swapMutate        zero draws when route.size() < 2; one unit() when the
 //                        rate declines; one unit() and two below() when it
