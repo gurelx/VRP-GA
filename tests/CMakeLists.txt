@@ -16,6 +16,7 @@ add_executable(vrp_tests
   test_population.cpp
   test_operators.cpp
   test_strategies.cpp
+  test_solver.cpp
 )
 target_link_libraries(vrp_tests PRIVATE vrp_core Catch2::Catch2WithMain)
 target_link_libraries(vrp_tests PRIVATE vrp_warnings)
