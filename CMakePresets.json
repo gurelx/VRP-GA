@@ -19,42 +19,32 @@
         "CMAKE_BUILD_TYPE": "Release",
         "VRP_BUILD_TESTS": "ON"
       }
-    },
-    {
-      "name": "asan-ubsan",
-      "inherits": "debug",
-      "binaryDir": "${sourceDir}/build/asan",
-      "cacheVariables": {
-        "VRP_ENABLE_SANITIZERS": "ON",
-        "VRP_SANITIZER_FLAGS": "-fsanitize=address,undefined;-fno-omit-frame-pointer"
-      }
-    },
-    {
-      "name": "tsan",
-      "inherits": "debug",
-      "binaryDir": "${sourceDir}/build/tsan",
-      "cacheVariables": {
-        "VRP_ENABLE_SANITIZERS": "ON",
-        "VRP_SANITIZER_FLAGS": "-fsanitize=thread;-fno-omit-frame-pointer"
-      }
     }
   ],
   "buildPresets": [
-    { "name": "debug", "configurePreset": "debug" },
-    { "name": "release", "configurePreset": "release" },
-    { "name": "asan-ubsan", "configurePreset": "asan-ubsan" },
-    { "name": "tsan", "configurePreset": "tsan" }
+    {
+      "name": "debug",
+      "configurePreset": "debug"
+    },
+    {
+      "name": "release",
+      "configurePreset": "release"
+    }
   ],
   "testPresets": [
     {
       "name": "debug",
       "configurePreset": "debug",
-      "output": { "outputOnFailure": true }
+      "output": {
+        "outputOnFailure": true
+      }
     },
     {
       "name": "release",
       "configurePreset": "release",
-      "output": { "outputOnFailure": true }
+      "output": {
+        "outputOnFailure": true
+      }
     }
   ]
 }

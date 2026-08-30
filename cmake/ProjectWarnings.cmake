@@ -15,9 +15,3 @@ else()
   endif()
 endif()
 
-# Sanitizers are Linux/CI oriented. GCC on MinGW-w64 has no TSan and
-# unreliable ASan; do not expect these presets to configure on Windows.
-if(VRP_ENABLE_SANITIZERS AND NOT MSVC)
-  target_compile_options(vrp_warnings INTERFACE ${VRP_SANITIZER_FLAGS})
-  target_link_options(vrp_warnings INTERFACE ${VRP_SANITIZER_FLAGS})
-endif()

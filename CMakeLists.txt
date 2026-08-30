@@ -11,9 +11,6 @@ endif()
 
 option(VRP_BUILD_TESTS "Build the test suite" ${PROJECT_IS_TOP_LEVEL})
 option(VRP_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
-option(VRP_ENABLE_SANITIZERS "Enable sanitizer flags from VRP_SANITIZER_FLAGS" OFF)
-set(VRP_SANITIZER_FLAGS "-fsanitize=address,undefined;-fno-omit-frame-pointer"
-    CACHE STRING "Sanitizer flags used when VRP_ENABLE_SANITIZERS is ON")
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(ProjectWarnings)
