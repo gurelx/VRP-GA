@@ -1,0 +1,35 @@
+include(FetchContent)
+FetchContent_Declare(Catch2
+  GIT_REPOSITORY https://github.com/catchorg/Catch2.git
+  GIT_TAG        v3.7.1
+  FIND_PACKAGE_ARGS 3 NAMES Catch2)
+FetchContent_MakeAvailable(Catch2)
+
+list(APPEND CMAKE_MODULE_PATH "${catch2_SOURCE_DIR}/extras")
+include(Catch)
+
+add_executable(vrp_tests
+  test_smoke.cpp
+  test_rng.cpp
+  test_problem.cpp
+  test_executor.cpp
+  test_population.cpp
+  test_operators.cpp
+  test_strategies.cpp
+  test_solver.cpp
+  test_determinism.cpp
+  test_cli.cpp
+  test_reporter.cpp
+  # Header-only test support shared by test_solver.cpp and test_determinism.cpp.
+  # Listed so it shows up in IDE and language-server file lists; CMake does not
+  # compile it.
+  SolverTrace.hpp
+)
+target_link_libraries(vrp_tests PRIVATE vrp_core vrp_app Catch2::Catch2WithMain)
+target_link_libraries(vrp_tests PRIVATE vrp_warnings)
+
+get_filename_component(VRP_COMPILER_DIR "${CMAKE_CXX_COMPILER}" DIRECTORY)
+# TIMEOUT so that a wedged thread pool fails fast and by name. A lost wakeup, a
+# missed decrement and an outstanding_ underflow are all detectable only as a
+# hang, and CTest's default would sit on each one for 1500 s.
+catch_discover_tests(vrp_tests DL_PATHS "${VRP_COMPILER_DIR}" PROPERTIES TIMEOUT 60)

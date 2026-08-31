@@ -30,3 +30,12 @@
 *.exe
 *.out
 *.app
+
+# Build output
+build/
+
+# CMake
+CMakeUserPresets.json
+
+# Editor and language-server caches
+.cache/
