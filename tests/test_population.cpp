@@ -69,22 +69,20 @@ TEST_CASE("stored fitness matches independent recomputation", "[population]") {
 TEST_CASE("population construction is identical across thread counts", "[population]") {
     const vrp::Problem problem = vrp::Problem::defaultInstance();
     // Not a multiple of 3 or 8, so chunkRange's ragged-remainder branch carries
-    // the comparison rather than the even-split path.
+    // the comparison.
     constexpr std::size_t kSize = 1003;
 
     auto serial = vrp::makeExecutor(1);
     const vrp::Population a(kSize, problem, 12345, *serial);
 
-    // Self-validating guard: a constructor that emitted one fixed permutation
-    // for every individual would satisfy every cross-thread comparison below
-    // without saying anything at all.
+    // A constructor that emitted one fixed permutation for every individual
+    // would satisfy every cross-thread comparison below without saying anything.
     REQUIRE_FALSE(std::equal(a.route(0).begin(), a.route(0).end(),
                              a.route(1).begin(), a.route(1).end()));
 
     for (const std::size_t threads : {std::size_t{3}, std::size_t{8}}) {
         auto threaded = vrp::makeExecutor(threads);
-        // Constructed repeatedly: a divergence that only shows on some
-        // interleavings -- which is what a race would actually produce -- would
+        // Repeated: a divergence that only shows on some interleavings would
         // otherwise flake in the passing direction.
         for (int attempt = 0; attempt < 3; ++attempt) {
             const vrp::Population b(kSize, problem, 12345, *threaded);
@@ -101,12 +99,10 @@ TEST_CASE("population construction is identical across thread counts", "[populat
     }
 }
 
-// Agreement between executors is not conformance to the specified derivation:
-// any wrong-but-consistent seeding scheme satisfies the test above unchanged.
-// This one replays mixSeed(seed, kInitDomain, i) and the backward Fisher-Yates
-// by hand, pinning the domain tag, the item index and the shuffle direction.
-// A kInitDomain regression in particular would be invisible everywhere else,
-// while silently correlating the initial population with generation 0.
+// Agreement between executors is not conformance: a wrong-but-consistent
+// seeding scheme satisfies the case above. This replays mixSeed(seed,
+// kInitDomain, i) and the backward Fisher-Yates by hand, pinning the domain tag,
+// the item index and the shuffle direction.
 TEST_CASE("the initial shuffle reproduces the specified seed stream", "[population]") {
     const vrp::Problem problem = vrp::Problem::defaultInstance();
     auto exec = vrp::makeExecutor(1);
@@ -168,18 +164,14 @@ TEST_CASE("bestIndex and worstIndex find the extremes", "[population]") {
     }
 }
 
-// SUBSUMED, kept for the postcondition it documents: this case CANNOT detect an
-// evaluateAll that does nothing. Reversing a route walks the same cycle
-// backwards, and on a symmetric distance matrix that is the same multiset of
-// edges, so the tour length is unchanged to within summation rounding (~1e-14,
-// inside the tolerance below). "evaluateAll replaces fitness a direct route
-// edit made stale" is the case that actually covers the no-op.
+// SUBSUMED by "evaluateAll replaces fitness a direct route edit made stale":
+// reversal is distance-preserving on a symmetric matrix, so this case cannot
+// detect an evaluateAll that does nothing.
 TEST_CASE("evaluateAll refreshes every fitness value", "[population]") {
     const vrp::Problem problem = vrp::Problem::defaultInstance();
     auto exec = vrp::makeExecutor(4);
     vrp::Population pop(400, problem, 3, *exec);
 
-    // Reverse each route in place, bypassing setRoute so fitness goes stale.
     for (std::size_t i = 0; i < pop.size(); ++i) {
         std::span<int> r = pop.route(i);
         std::reverse(r.begin(), r.end());
@@ -213,11 +205,6 @@ TEST_CASE("swap exchanges contents", "[population]") {
     REQUIRE(std::equal(b.route(0).begin(), b.route(0).end(), firstOfA.begin()));
 }
 
-// ---------------------------------------------------------------------------
-// The cases below close gaps the ones above leave open. Each names the wrong
-// implementation it exists to catch.
-// ---------------------------------------------------------------------------
-
 TEST_CASE("a default-constructed population is empty", "[population]") {
     const vrp::Population pop;
     REQUIRE(pop.size() == 0);
@@ -225,8 +212,7 @@ TEST_CASE("a default-constructed population is empty", "[population]") {
 }
 
 // Catches a Fisher-Yates loop that stops one iteration early: the routes stay
-// valid permutations, so every other test still passes, but one position would
-// hold the same customer in every individual.
+// valid permutations, so every other case still passes.
 TEST_CASE("the shuffle reaches every position", "[population]") {
     const vrp::Problem problem = vrp::Problem::defaultInstance();
     auto exec = vrp::makeExecutor(1);
@@ -245,9 +231,8 @@ TEST_CASE("the shuffle reaches every position", "[population]") {
     }
 }
 
-// The reversal used above is distance-preserving on a symmetric matrix, so it
-// cannot tell evaluateAll apart from a no-op. A rotation moves which customers
-// neighbour the depot and therefore does change the tour length.
+// A rotation, not the reversal used above: it moves which customers neighbour
+// the depot and so actually changes the tour length.
 TEST_CASE("evaluateAll replaces fitness a direct route edit made stale",
           "[population]") {
     const vrp::Problem problem = vrp::Problem::defaultInstance();
@@ -278,9 +263,8 @@ TEST_CASE("evaluateAll replaces fitness a direct route edit made stale",
 
 TEST_CASE("the shape constructor zero-fills routes and fitness", "[population]") {
     const vrp::Population pop(7, 19);
-    // Asserted here rather than borrowed from the case above: without it a
-    // non-allocating constructor would be detected only by the loop below
-    // reading out of bounds, which is not a detection at all.
+    // Without this a non-allocating constructor would be "detected" only by the
+    // loop below reading out of bounds.
     REQUIRE(pop.size() == 7);
     for (std::size_t i = 0; i < pop.size(); ++i) {
         INFO("individual " << i);
@@ -292,9 +276,8 @@ TEST_CASE("the shape constructor zero-fills routes and fitness", "[population]")
     }
 }
 
-// Catches a stride error in setRoute. Individual 0 and the LAST individual are
-// the two that matter: a stride bug at the end walks off the buffer rather than
-// merely into a neighbour.
+// Catches a stride error in setRoute: individual 0 and the LAST one are the two
+// that matter, since a stride bug at the end walks off the buffer.
 TEST_CASE("setRoute leaves the other individuals untouched", "[population]") {
     const vrp::Problem problem = vrp::Problem::defaultInstance();
     auto exec = vrp::makeExecutor(1);
@@ -330,8 +313,6 @@ TEST_CASE("setRoute leaves the other individuals untouched", "[population]") {
     }
 }
 
-// setRoute must be callable from inside a parallelFor for distinct i, which is
-// exactly how the offspring buffer is filled later on.
 TEST_CASE("setRoute is safe to call concurrently for distinct individuals",
           "[population]") {
     const vrp::Problem problem = vrp::Problem::defaultInstance();
@@ -379,8 +360,6 @@ TEST_CASE("swap exchanges routes, fitness and shape", "[population]") {
                        firstRouteOfA.end()));
 }
 
-// The hidden friend is what makes the two-step form -- which the standard
-// algorithms use internally -- select the buffer swap over three moves.
 TEST_CASE("an unqualified swap finds the member through ADL", "[population]") {
     const vrp::Problem problem = vrp::Problem::defaultInstance();
     auto exec = vrp::makeExecutor(1);

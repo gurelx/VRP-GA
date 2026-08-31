@@ -11,20 +11,18 @@
 namespace vrp {
 namespace {
 
-// Preserves the semantics of the original sequential program: two tournament
-// parents, one child, replacing the worst individual. Inherently serial; the
-// executor is unused here, so --threads does not accelerate this strategy.
+// Two tournament parents, one child, replacing the worst individual.
+// Inherently serial: the executor is unused, so --threads does not help.
 class SteadyStateStrategy final : public EvolutionStrategy {
 public:
     const char* name() const noexcept override { return "steady-state"; }
 
     void step(std::size_t generation, Population& population, const Problem& problem,
               const GaParams& params, Executor& /*executor*/) override {
-        // Const view, so route() yields span<const int> and no path here can
-        // write a gene without going through setRoute and its fitness update.
+        // Const view, so no path here can write a gene without going through
+        // setRoute and its fitness update.
         const Population& current = population;
-        // Slot 0: one child per generation, so there is only one stream to
-        // name. Still mixSeed(seed, generation, slot) -- the same rule the
+        // Slot 0: mixSeed(seed, generation, slot), the same rule the
         // generational strategy follows, not a special case.
         Rng rng(mixSeed(params.seed, generation, std::size_t{0}));
 
@@ -32,14 +30,14 @@ public:
         const std::size_t second = ops::tournamentSelect(current, params.tournamentSize, rng);
 
         child_.resize(population.routeLength());
-        // customerCount + 1 because genes are 1-based; sizing it customerCount
-        // puts the highest gene one past the end.
+        // customerCount + 1: genes are 1-based, so customerCount would put the
+        // highest gene one past the end.
         seen_.assign(problem.customerCount() + 1, 0);
         ops::orderCrossover(current.route(first), current.route(second), child_, seen_, rng);
         ops::swapMutate(child_, params.mutationRate, rng);
 
-        // The worst individual, not the best: this is the replacement that
-        // makes the incumbent best unlosable.
+        // The worst individual, not the best: this is what makes the incumbent
+        // best unlosable.
         population.setRoute(population.worstIndex(), child_, problem);
     }
 
@@ -48,8 +46,6 @@ private:
     std::vector<char> seen_;
 };
 
-// Builds a full offspring population each generation, carrying eliteCount best
-// individuals forward unchanged.
 class GenerationalStrategy final : public EvolutionStrategy {
 public:
     const char* name() const noexcept override { return "generational"; }
@@ -67,8 +63,7 @@ public:
         const std::size_t elites = std::min(params.eliteCount, count);
 
         // Total order (fitness, index) makes the elite set deterministic even
-        // though partial_sort is not stable. Fitness alone would leave the
-        // choice among tied individuals to the algorithm's internal moves.
+        // though partial_sort is not stable.
         order_.resize(count);
         std::iota(order_.begin(), order_.end(), std::size_t{0});
         std::partial_sort(
@@ -82,25 +77,21 @@ public:
             next_.setRoute(i, current.route(order_[i]), problem);
         }
 
-        // Offspring occupy [elites, count); the loop counts from 0 so the
-        // executor sees a range starting at 0, and shifts by `elites` to get
-        // the slot. Writing at k rather than k + elites would overwrite the
-        // elites just copied and leave the tail of next_ stale.
+        // The loop counts from 0 so the executor sees a range starting at 0;
+        // writing at k rather than k + elites would overwrite the elites just
+        // copied and leave the tail of next_ stale.
         const std::size_t offspring = count - elites;
         executor.parallelFor(offspring, [&](std::size_t begin, std::size_t end) {
             // Scratch is per chunk, not per child -- this is why the body takes
             // a range instead of an index. orderCrossover clears `seen` itself,
-            // so reuse across children carries nothing forward. (These two
-            // allocations are the only throwing operations in the body; a
-            // bad_alloc on a worker would terminate, per Executor's contract.)
+            // so reuse across children carries nothing forward.
             std::vector<char> seen(problem.customerCount() + 1, 0);
             std::vector<int> child(length);
             for (std::size_t k = begin; k < end; ++k) {
                 const std::size_t slot = k + elites;
                 // Seeded by the absolute slot, never by a chunk-relative index
-                // or a thread identity, so chunking cannot change the outcome:
-                // this is the whole reason a threaded run reproduces a serial
-                // one bit for bit.
+                // or a thread identity: this is why a threaded run reproduces a
+                // serial one bit for bit.
                 Rng rng(mixSeed(params.seed, generation, slot));
                 const std::size_t a =
                     ops::tournamentSelect(current, params.tournamentSize, rng);
@@ -109,14 +100,13 @@ public:
                 ops::orderCrossover(current.route(a), current.route(b), child, seen, rng);
                 ops::swapMutate(child, params.mutationRate, rng);
                 // Distinct slots across the whole range, so the concurrent
-                // writes are disjoint.
+                // writes are disjoint -- setRoute's precondition.
                 next_.setRoute(slot, child, problem);
             }
         });
 
         // Without this the generation is computed and thrown away. Spans taken
-        // before the swap now name the other buffer, so nothing may hold one
-        // across it.
+        // before the swap now name the other buffer.
         population.swap(next_);
     }
 

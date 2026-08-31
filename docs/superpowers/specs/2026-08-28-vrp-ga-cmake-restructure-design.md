@@ -106,10 +106,10 @@ invoking a subprocess; `vrp_ga` is then a trivial `main`.
 - `CMAKE_CXX_STANDARD 20`, `CXX_STANDARD_REQUIRED ON`, `CXX_EXTENSIONS OFF`.
   C++20 supplies `std::jthread`, `<barrier>`, and `std::span`.
 - Options: `VRP_BUILD_TESTS` (ON when top-level), `VRP_WARNINGS_AS_ERRORS`
-  (OFF), `VRP_ENABLE_SANITIZERS` (OFF).
+  (OFF).
 - Catch2 is declared with `FIND_PACKAGE_ARGS` so an installed copy is preferred
   and the download happens only when none is present.
-- `CMakePresets.json`: `debug`, `release`, `asan-ubsan`, `tsan`, all Ninja.
+- `CMakePresets.json`: `debug` and `release`, both Ninja.
 
 ## Core library design
 
@@ -361,8 +361,11 @@ Catch2 v3, registered through `catch_discover_tests`.
 | `test_rng.cpp` | xoshiro256\*\* and splitmix64 reference vectors; `below()` range and absence of modulo bias; `unit()` within `[0, 1)`. Pins 14. |
 | `test_cli.cpp` | Defaults, rejection of invalid values, `--threads 0` resolving to `hardware_concurrency` |
 
-The `asan-ubsan` and `tsan` presets exist so the thread pool is demonstrated
-clean rather than argued clean.
+MinGW-w64 UCRT ships no sanitizer runtimes, so ThreadSanitizer, AddressSanitizer
+and UBSan are all unavailable and the project defines no sanitizer presets. No
+dynamic analysis is available on this toolchain, which leaves the test suite as
+the only evidence for the thread pool: it compensates with repetition rather
+than detection, and repetition is not proof.
 
 ## Command-line interface
 
@@ -414,7 +417,7 @@ configuration table.
 5. Both strategies plus `Solver` with tests.
 6. `Cli`, `Reporter`, `main`; delete `main.cpp` and `main_parallel.cpp`.
 7. `git rm` the committed `main` and `main_parallel` binaries.
-8. Determinism suite across thread counts; sanitizer runs.
+8. Determinism suite across thread counts.
 9. README rewrite.
 
 ## Risks

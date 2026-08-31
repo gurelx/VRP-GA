@@ -16,6 +16,9 @@
 namespace {
 
 bool isPermutation(std::span<const int> route, std::size_t n) {
+    if (route.size() != n) {
+        return false;
+    }
     std::vector<int> sorted(route.begin(), route.end());
     std::sort(sorted.begin(), sorted.end());
     for (std::size_t i = 0; i < n; ++i) {
@@ -40,11 +43,9 @@ struct Offspring {
     std::size_t secondParent = 0;
 };
 
-// A literal restatement of the specified derivation for one slot: seed from
-// mixSeed(seed, generation, slot), two tournaments, order crossover, swap
-// mutation, in that order. It shares no code with Strategy.cpp, takes `slot`
-// from the caller rather than from anything a strategy exposes, and allocates
-// its scratch fresh so no carryover between slots can mask a defect.
+// A literal restatement of the specified derivation for one slot. It shares no
+// code with Strategy.cpp, takes `slot` from the caller rather than from
+// anything a strategy exposes, and allocates its scratch fresh.
 Offspring expectedOffspring(const vrp::Population& previous, const vrp::Problem& problem,
                             const vrp::GaParams& params, std::size_t generation,
                             std::size_t slot) {
@@ -61,10 +62,9 @@ Offspring expectedOffspring(const vrp::Population& previous, const vrp::Problem&
     return result;
 }
 
-// Forwards to a real executor and counts the calls. parallelFor amortises a
-// condition-variable round trip per call, so "how many times per generation"
-// is part of the strategies' contract, not an implementation detail: a version
-// that scheduled once per child would be functionally correct and unusable.
+// parallelFor amortises a condition-variable round trip per call, so "how many
+// times per generation" is part of the strategies' contract: a version that
+// scheduled once per child would be functionally correct and unusable.
 class CountingExecutor final : public vrp::Executor {
 public:
     explicit CountingExecutor(std::size_t threads) : inner_(vrp::makeExecutor(threads)) {}
@@ -85,10 +85,8 @@ private:
 }  // namespace
 
 TEST_CASE("GaParams carries the documented defaults", "[strategy]") {
-    // Nothing in this task reads these -- both strategies take the size from
-    // the Population and the generation index from their caller -- so a typo
-    // would survive Task 7 entirely and surface as a silent behaviour change
-    // once Task 8 wires the CLI to them.
+    // Pinned here because nothing in the library reads these: both strategies
+    // take the size from the Population and the generation from their caller.
     constexpr vrp::GaParams params{};
     STATIC_REQUIRE(params.populationSize == 100000);
     STATIC_REQUIRE(params.generations == 100);
@@ -98,9 +96,8 @@ TEST_CASE("GaParams carries the documented defaults", "[strategy]") {
     STATIC_REQUIRE(params.seed == 42);
 }
 
-// VACUOUS BY CONSTRUCTION: pins the makeStrategy switch dispatch and the two
-// name strings, and nothing else. Kept because the names are part of the
-// public interface Task 8 prints.
+// VACUOUS: pins the makeStrategy switch dispatch and the two name strings, and
+// nothing else. The names are part of the interface the CLI prints.
 TEST_CASE("both strategies are named", "[strategy]") {
     REQUIRE(std::string(vrp::makeStrategy(vrp::StrategyKind::SteadyState)->name()) ==
             "steady-state");
@@ -126,10 +123,8 @@ TEST_CASE("populations stay valid across generations", "[strategy]") {
     }
 }
 
-// WEAK: re-asserts Population::setRoute's own invariant, which Task 5 already
-// owns and tests. It can only fail if a strategy writes genes through the
-// non-const route() accessor instead of setRoute -- worth keeping as a guard
-// against exactly that, but it is not evidence about the strategies.
+// WEAK: re-asserts setRoute's own invariant, owned by test_population.cpp. It
+// can only fail if a strategy writes genes through the non-const route().
 TEST_CASE("fitness stays consistent with routes after every step", "[strategy]") {
     for (auto kind : {vrp::StrategyKind::SteadyState, vrp::StrategyKind::Generational}) {
         const vrp::Problem problem = vrp::Problem::defaultInstance();
@@ -149,7 +144,7 @@ TEST_CASE("fitness stays consistent with routes after every step", "[strategy]")
 }
 
 TEST_CASE("best fitness never regresses", "[strategy]") {
-    // Steady-state only ever replaces the worst individual; generational keeps
+    // Steady-state replaces only the worst individual; generational keeps
     // eliteCount >= 1. Either way the incumbent best cannot be lost.
     for (auto kind : {vrp::StrategyKind::SteadyState, vrp::StrategyKind::Generational}) {
         const vrp::Problem problem = vrp::Problem::defaultInstance();
@@ -188,10 +183,8 @@ TEST_CASE("evolution improves on the initial population", "[strategy]") {
 }
 
 // ONE-SIDED: `changed <= 1` is satisfied by an implementation that changes
-// nothing at all. "steady state offspring follows the specified seeding and
-// replacement" below is the two-sided form -- it names the slot that must
-// change, says what must land in it, and requires every other slot to be
-// untouched.
+// nothing. "steady state offspring follows the specified seeding and
+// replacement" below is the two-sided form.
 TEST_CASE("steady state replaces exactly one individual per step", "[strategy]") {
     const vrp::Problem problem = vrp::Problem::defaultInstance();
     auto exec = vrp::makeExecutor(1);
@@ -234,17 +227,12 @@ TEST_CASE("generational elitism carries the best individual forward",
     REQUIRE(std::equal(pop.route(0).begin(), pop.route(0).end(), bestBefore.begin()));
 }
 
-// ---------------------------------------------------------------------------
-// Everything above is satisfied by any per-slot seeding: valid permutations, a
-// preserved elite and a population that improves are all insensitive to which
-// stream each offspring draws from. The cases below pin the seeding itself,
-// which is what makes a threaded run reproduce a serial one.
-// ---------------------------------------------------------------------------
+// Everything above is satisfied by any per-slot seeding. The cases below pin
+// the seeding itself, which is what makes a threaded run reproduce a serial one.
 
 TEST_CASE("generational results are identical at every thread count", "[strategy]") {
-    // A chunk-relative or thread-derived seed passes every test above and fails
-    // here. The whole final population must agree bit for bit, not just the
-    // best individual: a single divergent slot is a divergent run.
+    // A chunk-relative or thread-derived seed passes every case above and fails
+    // here. A single divergent slot is a divergent run.
     const vrp::Problem problem = vrp::Problem::defaultInstance();
     vrp::GaParams params = smallParams();
     params.populationSize = 97;  // prime, so no thread count divides it evenly
@@ -275,12 +263,9 @@ TEST_CASE("generational results are identical at every thread count", "[strategy
     }
 }
 
-// VACUOUS FOR THIS TASK: SteadyStateStrategy::step ignores its Executor
-// entirely, so the only thing that varies with the thread count here is the
-// Population constructor, whose determinism Task 5 owns and tests. Kept as a
-// regression guard for the day the strategy starts scheduling work -- but it
-// is not evidence that this task's code is chunk-independent, and it must not
-// be counted as such.
+// VACUOUS: SteadyStateStrategy::step ignores its Executor, so the only thing
+// varying with the thread count is the Population constructor, whose
+// determinism test_population.cpp owns. A guard for when it starts scheduling.
 TEST_CASE("steady state results are identical at every thread count", "[strategy]") {
     const vrp::Problem problem = vrp::Problem::defaultInstance();
     const vrp::GaParams params = smallParams();
@@ -308,22 +293,16 @@ TEST_CASE("steady state results are identical at every thread count", "[strategy
 
 TEST_CASE("generational offspring follow the specified per-slot seeding",
           "[strategy]") {
-    // Cross-thread agreement only proves the runs agree with each other. It
-    // cannot tell mixSeed(seed, generation, slot) from the transposed
-    // mixSeed(seed, slot, generation), which is just as chunk-independent and
-    // just as wrong. Replay the specified stream against a snapshot of the
-    // parent population instead.
-    //
-    // Run at 4 threads as well as 1, so "the threaded result matches the
-    // specification" is one assertion rather than a chain through the
-    // cross-thread-count case.
+    // Cross-thread agreement cannot tell mixSeed(seed, generation, slot) from
+    // the transposed mixSeed(seed, slot, generation), which is just as
+    // chunk-independent and just as wrong. Replay the specified stream instead.
     const vrp::Problem problem = vrp::Problem::defaultInstance();
     vrp::GaParams params = smallParams();
     params.populationSize = 64;
     params.eliteCount = 2;
 
-    // A generation index that is neither 0 nor a valid slot for most slots, so
-    // the transposed argument order cannot silently coincide.
+    // Neither 0 nor a valid slot for most slots, so the transposed argument
+    // order cannot silently coincide.
     const std::size_t generation = 7;
 
     for (std::size_t threads : {std::size_t{1}, std::size_t{4}}) {
@@ -347,9 +326,9 @@ TEST_CASE("generational offspring follow the specified per-slot seeding",
 
 TEST_CASE("steady state offspring follows the specified seeding and replacement",
           "[strategy]") {
-    // The default strategy, and until now the only one with no oracle: every
-    // other test that touches it asserts an invariant that a wrongly seeded,
-    // wrongly parented or wrongly parameterised implementation also satisfies.
+    // The oracle for the default strategy: every other case that touches it
+    // asserts an invariant a wrongly seeded or wrongly parented implementation
+    // also satisfies.
     const vrp::Problem problem = vrp::Problem::defaultInstance();
     auto exec = vrp::makeExecutor(1);
     vrp::GaParams params = smallParams();
@@ -367,9 +346,8 @@ TEST_CASE("steady state offspring follows the specified seeding and replacement"
 
     const Offspring expected = expectedOffspring(previous, problem, params, generation, 0);
 
-    // The fixture has to discriminate: if the two tournaments happened to
-    // return the same index, an implementation that crossed one parent with
-    // itself would be invisible below.
+    // The fixture has to discriminate: with the two tournaments returning the
+    // same index, a crossover of one parent with itself would be invisible.
     REQUIRE(expected.firstParent != expected.secondParent);
 
     REQUIRE(std::equal(expected.route.begin(), expected.route.end(),
@@ -390,14 +368,9 @@ TEST_CASE("steady state offspring follows the specified seeding and replacement"
 
 TEST_CASE("generational schedules one parallelFor per generation and steady-state none",
           "[strategy]") {
-    // Granularity is a correctness-adjacent property that no output check can
-    // see: scheduling per child computes the same population and pays a
-    // condition-variable round trip per individual.
-    //
-    // The assertions below are equalities, not upper bounds, and the name says
-    // so: "at most one" would also be satisfied by a strategy that scheduled
-    // nothing at all, which for the generational case would mean the offspring
-    // loop had stopped going through the executor entirely.
+    // Granularity is invisible to any output check: scheduling per child
+    // computes the same population. The assertions are equalities, not upper
+    // bounds -- "at most one" is also satisfied by scheduling nothing at all.
     const vrp::Problem problem = vrp::Problem::defaultInstance();
     vrp::GaParams params = smallParams();
     params.populationSize = 40;
@@ -439,8 +412,6 @@ TEST_CASE("generational with no elites derives every slot from the oracle", "[st
     const vrp::Population previous = pop;
     strategy->step(generation, pop, problem, params, *exec);
 
-    // Offspring start at slot 0 and the shift by `elites` is genuinely zero:
-    // nothing is carried forward and no slot is skipped.
     for (std::size_t slot = 0; slot < previous.size(); ++slot) {
         const Offspring expected =
             expectedOffspring(previous, problem, params, generation, slot);
@@ -482,12 +453,10 @@ TEST_CASE("generational clamps an elite count at or above the population size",
 }
 
 TEST_CASE("generational elites break fitness ties by index", "[strategy]") {
-    // Customers 1..3 share a location, so any ordering of them accumulates the
-    // same distances in the same order and ties bit-exactly: three distinct
-    // routes with one fitness. Customer 4 is far away, and visiting it early
-    // pays the detour twice. With eliteCount = 2 the tie straddles the elite
-    // boundary, which is the only place a comparator on fitness alone can
-    // diverge from the total order on (fitness, index).
+    // Customers 1..3 share a location, so three distinct routes tie
+    // bit-exactly; customer 4 is far away and visiting it early costs more.
+    // With eliteCount = 2 the tie straddles the elite boundary, the only place
+    // a comparator on fitness alone diverges from the total order.
     const vrp::Problem problem(
         std::vector<vrp::Point>{{0, 0}, {10, 0}, {10, 0}, {10, 0}, {0, 100}});
 
@@ -513,8 +482,7 @@ TEST_CASE("generational elites break fitness ties by index", "[strategy]") {
     auto strategy = vrp::makeStrategy(vrp::StrategyKind::Generational);
     strategy->step(0, pop, problem, params, *exec);
 
-    // Individuals 1, 2 and 3 all tie for best; the total order picks 1 then 2,
-    // in that order, and puts them in the leading slots.
+    // Individuals 1, 2 and 3 all tie for best; the total order picks 1 then 2.
     REQUIRE(std::equal(routes[1].begin(), routes[1].end(), pop.route(0).begin()));
     REQUIRE(std::equal(routes[2].begin(), routes[2].end(), pop.route(1).begin()));
 }

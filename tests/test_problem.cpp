@@ -63,10 +63,8 @@ TEST_CASE("route distance closes the loop through the depot", "[problem]") {
     REQUIRE_THAT(p.routeDistance(route), WithinAbs(4.0, 1e-12));
 }
 
-// The unit-square fixture above gives every leg length 1, so it cannot tell
-// which endpoints a buggy implementation used -- a routeDistance that closed
-// the loop from the wrong end, or simply returned 4.0, would still pass it.
-// This 3-4-5 tour makes all three legs distinct.
+// The unit-square fixture gives every leg length 1, so it cannot tell which
+// endpoints an implementation used. This 3-4-5 tour makes all three distinct.
 TEST_CASE("route distance sums each leg exactly once on an asymmetric tour", "[problem]") {
     // Depot (0,0) -> (3,0) -> (3,4) -> depot. Legs are 3, 4 and 5.
     const std::vector<vrp::Point> pts{{0, 0}, {3, 0}, {3, 4}};
@@ -78,10 +76,8 @@ TEST_CASE("route distance sums each leg exactly once on an asymmetric tour", "[p
     REQUIRE_THAT(p.routeDistance(single), WithinAbs(10.0, 1e-12));
 }
 
-// Uses the 3-4-5 fixture rather than the unit square: with equal legs the two
-// directions coincide even for a broken cycle, so the square would let the
-// omitted-depot-leg and wrong-endpoint-close bugs through. Here they give
-// 9 vs 7 and 10 vs 14 respectively.
+// The 3-4-5 fixture, not the unit square: with equal legs the two directions
+// coincide even for a broken cycle.
 TEST_CASE("route distance is direction-independent", "[problem]") {
     const std::vector<vrp::Point> pts{{0, 0}, {3, 0}, {3, 4}};
     const vrp::Problem p(pts);

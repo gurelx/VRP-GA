@@ -23,8 +23,8 @@ Population::Population(std::size_t size, const Problem& problem, std::uint64_t s
             for (std::size_t j = 0; j < length; ++j) {
                 r[j] = static_cast<int>(j + 1);
             }
-            // Seeded per item, never per thread, so the shuffle is independent
-            // of how the range was chunked.
+            // Seeded per item, never per thread, so chunking cannot change the
+            // shuffle.
             Rng rng(mixSeed(seed, kInitDomain, i));
             for (std::size_t j = length; j > 1; --j) {
                 const std::uint32_t k = rng.below(static_cast<std::uint32_t>(j));
@@ -38,9 +38,6 @@ Population::Population(std::size_t size, const Problem& problem, std::uint64_t s
 void Population::setRoute(std::size_t i, std::span<const int> value,
                           const Problem& problem) {
     assert(i < fitness_.size() && "setRoute index out of range");
-    // The copy below is sized by the span, not by routeLength_, so a mismatch
-    // is a buffer overrun into the next individual or a stale-gene tail rather
-    // than a truncation. Fault here instead.
     assert(value.size() == routeLength_ &&
            "setRoute requires a route of exactly routeLength()");
     int* destination = routes_.data() + i * routeLength_;

@@ -52,14 +52,9 @@ void ThreadPoolExecutor::parallelFor(std::size_t n, const ParallelBody& body) {
     }
     startSignal_.notify_all();
 
-    // The workers are already in flight and are reading body_, so the pool has to
-    // be drained on every exit path -- including the one where the caller's own
-    // chunk throws (Task 7 allocates its per-chunk scratch buffers inside exactly
-    // this body, so bad_alloc is reachable). Unwinding without draining would
-    // leave body_ pointing at a std::function the unwinding then destroys, and
-    // would leave outstanding_ non-zero for the next call to overwrite, so the
-    // stale workers' decrements would underflow it and that caller would block
-    // forever.
+    // Drain on every exit path: the workers are already reading body_, so
+    // unwinding without draining leaves body_ dangling and outstanding_
+    // non-zero for the next call's decrements to underflow.
     try {
         const auto [begin, end] = chunkRange(n, threads_, 0);
         if (begin < end) {
@@ -82,9 +77,8 @@ void ThreadPoolExecutor::workerLoop(std::stop_token stop, std::size_t index) {
     std::uint64_t seenEpoch = 0;
     for (;;) {
         std::unique_lock lock(mutex_);
-        // wait returns the final value of the predicate, so false means the stop
-        // was requested with no work pending. Testing stop_requested() separately
-        // would instead discard an epoch published just before the stop.
+        // wait returns the predicate's final value; testing stop_requested()
+        // separately would discard an epoch published just before the stop.
         const auto hasWork = [this, seenEpoch] { return epoch_ != seenEpoch; };
         if (!startSignal_.wait(lock, stop, hasWork)) {
             return;

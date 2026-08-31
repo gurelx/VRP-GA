@@ -18,17 +18,8 @@ public:
     virtual const char* name() const noexcept = 0;
 
     // Binding on every implementation: step() must depend only on its
-    // arguments. Scratch kept between calls -- the two strategies here keep a
-    // buffer population, an ordering, a child and a seen-set -- must be fully
-    // written before it is read, so that a run of generations 0..N-1 over a
-    // freshly seeded population yields the same result no matter how many
-    // earlier runs the same object has performed.
-    //
-    // This is what makes Solver::run() repeatable on one instance, and it is
-    // stated here rather than there because Solver cannot enforce it: a
-    // strategy that carried a live RNG, a cumulative generation counter or an
-    // adaptive mutation rate across calls would break that guarantee without
-    // Solver being able to tell.
+    // arguments. Scratch kept between calls must be fully written before it is
+    // read, or Solver::run() stops being repeatable on one instance.
     virtual void step(std::size_t generation, Population& population,
                       const Problem& problem, const GaParams& params,
                       Executor& executor) = 0;

@@ -20,6 +20,6 @@ find_package(Threads REQUIRED)
 add_subdirectory(src)
 
 if(VRP_BUILD_TESTS)
-  include(CTest)
+  enable_testing()
   add_subdirectory(tests)
 endif()

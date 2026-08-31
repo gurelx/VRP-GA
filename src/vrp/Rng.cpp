@@ -13,8 +13,8 @@ std::uint64_t mix(std::uint64_t z) noexcept {
     return z ^ (z >> 31);
 }
 
-// xoshiro is a fixed point at the all-zero state: it would emit 0 forever.
-// Every construction path must run this.
+// The all-zero state is xoshiro's fixed point: it would emit 0 forever. Every
+// construction path must run this.
 void ensureNonZero(std::array<std::uint64_t, 4>& s) noexcept {
     if (s[0] == 0 && s[1] == 0 && s[2] == 0 && s[3] == 0) {
         s[0] = kGolden;
@@ -40,17 +40,12 @@ Rng::Rng(std::uint64_t seed) noexcept {
     for (auto& word : s_) {
         word = splitmix64(state);
     }
-    // splitmix64 makes an all-zero result effectively impossible here, but the
-    // guard costs nothing.
     ensureNonZero(s_);
 }
 
 Rng Rng::fromState(std::array<std::uint64_t, 4> state) noexcept {
     Rng rng;
     rng.s_ = state;
-    // Unlike the seed constructor, these are raw caller-supplied words, so the
-    // all-zero state is genuinely reachable — Rng::fromState({}) would otherwise
-    // return a generator permanently stuck emitting 0.
     ensureNonZero(rng.s_);
     return rng;
 }
@@ -68,8 +63,8 @@ std::uint64_t Rng::next() noexcept {
 }
 
 std::uint32_t Rng::below(std::uint32_t bound) noexcept {
-    // Lemire's nearly-divisionless bounded generation. Rejects only the short
-    // tail that would otherwise skew low buckets, unlike `next() % bound`.
+    // Lemire's nearly-divisionless bounded generation: rejects the short tail
+    // that `next() % bound` would instead fold onto the low buckets.
     std::uint64_t product =
         static_cast<std::uint64_t>(static_cast<std::uint32_t>(next() >> 32)) * bound;
     auto low = static_cast<std::uint32_t>(product);

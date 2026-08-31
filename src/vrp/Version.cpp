@@ -1,10 +1,7 @@
 #include "vrp/Version.hpp"
 
-// Supplied by target_compile_definitions in src/CMakeLists.txt from
-// project(... VERSION ...). Deliberately a hard error rather than a fallback
-// literal: a default here would let the build system's value silently stop
-// reaching the binary, and tests/test_smoke.cpp would go back to comparing a
-// literal against a copy of itself.
+// Supplied by the build. Deliberately a hard error rather than a fallback
+// literal, which would let the injected value silently stop reaching the binary.
 #if !defined(VRP_PROJECT_NAME) || !defined(VRP_PROJECT_VERSION)
 #error "VRP_PROJECT_NAME and VRP_PROJECT_VERSION must be defined by the build"
 #endif

@@ -9,8 +9,7 @@
 
 namespace {
 
-// Drives a whole run's worth of callbacks the way Solver does: 0-based
-// generation indices 0 .. generations-1.
+// Drives callbacks the way Solver does: 0-based indices 0 .. generations-1.
 std::string reportRun(std::size_t generations, std::size_t interval, bool quiet) {
     std::ostringstream out;
     const vrp::app::Reporter reporter(out, generations, interval, quiet);
@@ -32,8 +31,6 @@ std::size_t countOf(const std::string& haystack, const std::string& needle) {
 }  // namespace
 
 TEST_CASE("generation numbers are printed 1-based", "[reporter]") {
-    // Solver reports index 9 for the tenth generation; the human-facing number
-    // is 10. Printing the raw index would be off by one everywhere.
     const std::string output = reportRun(100, 10, false);
     REQUIRE(output.find("Generation 10: best distance = 1.5\n") != std::string::npos);
     REQUIRE(output.find("Generation 9:") == std::string::npos);
@@ -51,8 +48,6 @@ TEST_CASE("only interval generations are reported", "[reporter]") {
 }
 
 TEST_CASE("the final generation is reported even off the interval", "[reporter]") {
-    // The defect in the original: `gen % 10 == 0` never fired on the last
-    // generation, so a 25-generation run ended silently at 20.
     const std::string output = reportRun(25, 10, false);
     REQUIRE(output.find("Generation 25: best distance = 1.5\n") != std::string::npos);
     REQUIRE(countOf(output, "Generation ") == 3);

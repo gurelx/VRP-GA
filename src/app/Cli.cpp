@@ -12,10 +12,8 @@
 namespace vrp::app {
 namespace {
 
-// Every flag that takes a value. Consulted before a value is demanded, so that
-// an unknown flag in the last position is reported as unknown rather than as a
-// missing value -- both messages name the flag, but only one of them sends the
-// user looking for the right fix.
+// Consulted before a value is demanded, so an unknown flag in the last position
+// is reported as unknown rather than as a missing value.
 constexpr std::array<std::string_view, 8> kValueFlags{
     "--strategy", "--population", "--generations", "--mutation",
     "--tournament", "--elite", "--threads", "--seed",
@@ -45,7 +43,6 @@ bool parseDouble(std::string_view text, double& out) {
     if (text.empty()) {
         return false;
     }
-    // from_chars for double is available in GCC 11+ and MSVC 19.24+.
     const char* begin = text.data();
     const char* end = text.data() + text.size();
     const auto [ptr, ec] = std::from_chars(begin, end, out);
@@ -117,9 +114,8 @@ ParseResult parseArgs(std::span<const std::string_view> args) {
             if (!parseSize(value, options.params.populationSize)) {
                 return fail(std::string("invalid --population: ").append(value));
             }
-            // Population::bestIndex() asserts a non-empty population; in a
-            // release build the empty case is an out-of-bounds read rather
-            // than a diagnosable failure, and this is the only guard.
+            // The only guard: in a release build an empty population is an
+            // out-of-bounds read, not a diagnosable failure.
             if (options.params.populationSize == 0) {
                 return fail("--population must be at least 1");
             }
@@ -132,12 +128,8 @@ ParseResult parseArgs(std::span<const std::string_view> args) {
                 return fail(std::string("invalid --mutation: ").append(value));
             }
             // Negated conjunction, not a disjunction of the failing halves:
-            // from_chars accepts "nan" under chars_format::general, and NaN
-            // makes `nan < 0.0` and `nan > 1.0` BOTH false, so the naive form
-            // lets it through. It would then reach ops::swapMutate, whose
-            // guard `rng.unit() >= rate` is likewise false for NaN -- the rate
-            // would behave as 1.0 and every child would mutate. The CLI is the
-            // only validator on that path.
+            // from_chars accepts "nan", and both `nan < 0.0` and `nan > 1.0`
+            // are false. This is the only validator on that path.
             if (!(options.params.mutationRate >= 0.0 &&
                   options.params.mutationRate <= 1.0)) {
                 return fail("--mutation must lie in [0, 1]");
@@ -162,18 +154,14 @@ ParseResult parseArgs(std::span<const std::string_view> args) {
                 return fail(std::string("invalid --seed: ").append(value));
             }
         } else {
-            // Unreachable while kValueFlags and this chain agree; reached only
-            // if a flag is added to one and not the other.
+            // Unreachable while kValueFlags and this chain agree.
             return fail(std::string("unhandled option: ").append(flag));
         }
     }
 
-    // Checked after the whole command line, not at --elite, so that the two
-    // flags may be given in either order.
+    // Checked after the whole command line, not at --elite, so the two flags
+    // may be given in either order.
     if (options.params.eliteCount >= options.params.populationSize) {
-        // Both values are named because --elite defaults to 1: a user who
-        // typed only `--population 1` would otherwise be told off for a flag
-        // they never used, with no hint of where the other 1 came from.
         return fail("--elite (" + std::to_string(options.params.eliteCount) +
                     ") must be smaller than --population (" +
                     std::to_string(options.params.populationSize) + ")");

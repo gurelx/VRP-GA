@@ -45,11 +45,8 @@ std::vector<int> shuffledRoute(std::size_t n, vrp::Rng& rng) {
     return r;
 }
 
-// A deliberately naive, independent restatement of order crossover: copy
-// p1[lo..hi] verbatim, then walk p2 and drop the genes already present by a
-// linear std::find over the segment. It shares no logic with the seen-bitmask
-// implementation, so agreement between the two is evidence rather than
-// tautology.
+// An independent restatement of order crossover: it shares no logic with the
+// seen-bitmask implementation, so agreement is evidence rather than tautology.
 std::vector<int> referenceOrderCrossover(const std::vector<int>& p1,
                                          const std::vector<int>& p2, std::size_t lo,
                                          std::size_t hi) {
@@ -74,9 +71,8 @@ std::vector<int> referenceOrderCrossover(const std::vector<int>& p1,
         if (std::find(segBegin, segEnd, gene) != segEnd) {
             continue;
         }
-        // The oracle relies on the same permutation precondition the operator
-        // does. Guard it so a future fixture with mismatched parents fails an
-        // assertion here rather than running the oracle off the end.
+        // Guard the oracle's own permutation precondition, so a future fixture
+        // with mismatched parents fails here rather than running off the end.
         REQUIRE(k < freeSlots.size());
         child[freeSlots[k]] = gene;
         ++k;
@@ -85,7 +81,7 @@ std::vector<int> referenceOrderCrossover(const std::vector<int>& p1,
 }
 
 // orderCrossover draws its segment as two below(n) values and orders them, so a
-// mirror Rng replays exactly which segment a given seed selects.
+// mirror Rng replays which segment a given seed selects.
 std::pair<std::size_t, std::size_t> replaySegment(std::uint64_t seed, std::size_t n) {
     vrp::Rng mirror(seed);
     auto lo = static_cast<std::size_t>(mirror.below(static_cast<std::uint32_t>(n)));
@@ -146,10 +142,7 @@ TEST_CASE("crossover of identical parents reproduces that parent", "[operators]"
     }
 }
 
-// "Output is a permutation" accepts an operator that ignores a parent outright:
-// sourcing the segment from p2 instead of p1 collapses the whole result to p2,
-// and copying p1 wholesale ignores p2. Both are still permutations. This pins
-// the structure that separates them.
+// "Output is a permutation" also accepts an operator that echoes one parent.
 TEST_CASE("crossover recombines instead of echoing one parent", "[operators]") {
     constexpr std::size_t kN = 19;
     const std::vector<int> p1 = identityRoute(kN);
@@ -172,29 +165,26 @@ TEST_CASE("crossover recombines instead of echoing one parent", "[operators]") {
         vrp::ops::orderCrossover(p1, p2, child, seen, rng);
         INFO("seed " << seed << " segment " << lo << ".." << hi);
 
-        // The copied segment must be p1's genes, at p1's positions.
         for (std::size_t i = lo; i <= hi; ++i) {
             REQUIRE(child[i] == p1[i]);
         }
 
         const std::size_t segmentLength = hi - lo + 1;
         if (segmentLength >= 2) {
-            // p1 and p2 agree only at the single middle index here, so a
-            // segment of two or more positions cannot leave the child equal to
-            // p2 -- which is exactly what a p2-sourced segment would produce.
+            // p1 and p2 agree only at the middle index here, so a segment of
+            // two or more cannot leave the child equal to p2.
             REQUIRE(child != p2);
         }
         if (kN - segmentLength >= 2) {
-            // Two or more genes come from p2, in p2's (reversed) order, so the
-            // child cannot still be p1.
+            // Two or more genes come from p2 in reversed order, so the child
+            // cannot still be p1.
             REQUIRE(child != p1);
             ++partialSegments;
         }
     }
     REQUIRE(partialSegments > 0);
-    // Boundary coverage is a property of the seed range, not of the operator.
-    // Assert it rather than trusting it, so a later change to kN or to the seed
-    // count cannot quietly stop exercising the edges the write cursor turns on.
+    // Boundary coverage is a property of the seed range, not the operator: a
+    // later change to kN or the seed count could quietly stop exercising it.
     REQUIRE(sawLowAtZero);
     REQUIRE(sawHighAtEnd);
     REQUIRE(sawSingleton);
@@ -222,8 +212,8 @@ TEST_CASE("crossover matches an independent reference implementation", "[operato
         vrp::Rng rng(seed);
         vrp::ops::orderCrossover(p1, p2, child, seen, rng);
         INFO("seed " << seed << " segment " << lo << ".." << hi);
-        // Distinct parents are what makes the comparison meaningful; identical
-        // ones would satisfy the oracle for an operator that ignored p2.
+        // Identical parents would satisfy the oracle for an operator that
+        // ignored p2.
         REQUIRE(p1 != p2);
         REQUIRE(child == expected);
     }
@@ -232,10 +222,8 @@ TEST_CASE("crossover matches an independent reference implementation", "[operato
     REQUIRE(sawSingleton);
 }
 
-// Task 7 hoists one scratch buffer out of the offspring loop and hands it to
-// every crossover in a chunk, each with different parents. A stale mask would
-// silently drop genes, so the reused buffer must give bit-identical results to
-// a fresh one.
+// The offspring loop hands one scratch buffer to every crossover in a chunk, so
+// a reused buffer must give bit-identical results to a fresh one.
 TEST_CASE("crossover clears its scratch buffer on entry", "[operators]") {
     constexpr std::size_t kN = 19;
     std::vector<char> reused(kN + 1, 0);
@@ -260,11 +248,7 @@ TEST_CASE("crossover clears its scratch buffer on entry", "[operators]") {
     }
 }
 
-// SUBSUMED, kept as documentation of the calling pattern. Every property this
-// checks is a strict subset of "crossover clears its scratch buffer on entry",
-// which runs 500 different parent pairs through a reused buffer and requires
-// bit-identical results against a fresh one. This case cannot fail unless that
-// one does.
+// SUBSUMED by "crossover clears its scratch buffer on entry".
 TEST_CASE("crossover reuses the scratch buffer safely", "[operators]") {
     constexpr std::size_t kN = 19;
     std::vector<int> p1 = identityRoute(kN);
@@ -291,10 +275,8 @@ TEST_CASE("mutation rate 0 never alters a route", "[operators]") {
     REQUIRE(route == original);
 }
 
-// The rate test above can only fail on a draw of exactly 0.0, which a random
-// seed will never produce. xoshiro256** emits rotl(s[1] * 5, 7) * 9, so a state
-// whose second word is zero emits 0, and unit() is then exactly 0.0. That is
-// the one input separating `>= rate` from `> rate` at rate 0.
+// A state whose second word is zero makes unit() return exactly 0.0, the one
+// input separating `>= rate` from `> rate` at rate 0.
 TEST_CASE("mutation rate 0 declines even on a zero draw", "[operators]") {
     vrp::Rng rng = vrp::Rng::fromState({1, 0, 0, 0});
     vrp::Rng probe = vrp::Rng::fromState({1, 0, 0, 0});
@@ -324,8 +306,6 @@ TEST_CASE("mutation rate 1 always swaps two distinct positions", "[operators]") 
     }
 }
 
-// The exclusion rule must not bias the second index: over many seeds every
-// ordered pair of distinct positions should be reachable.
 TEST_CASE("mutation reaches every distinct pair of positions", "[operators]") {
     constexpr std::size_t kN = 6;
     std::vector<std::vector<int>> hits(kN, std::vector<int>(kN, 0));
@@ -356,12 +336,8 @@ TEST_CASE("mutation reaches every distinct pair of positions", "[operators]") {
     }
 }
 
-// SUBSUMED. Swapping two in-range positions preserves a permutation for ANY
-// choice of indices, so this cannot fail against any implementation that
-// swaps -- including one that self-swaps or ignores the rate entirely. The
-// properties it looks like it covers are actually covered by "mutation rate 1
-// always swaps two distinct positions" (exactly two positions change) and
-// "mutation reaches every distinct pair of positions" (index selection).
+// SUBSUMED by "mutation rate 1 always swaps two distinct positions" and
+// "mutation reaches every distinct pair of positions".
 TEST_CASE("mutation preserves permutations under repeated application",
           "[operators]") {
     std::vector<int> route = identityRoute(19);
@@ -402,10 +378,7 @@ TEST_CASE("mutation leaves an empty route alone", "[operators]") {
     REQUIRE(route.empty());
 }
 
-// SUBSUMED. Rng::below(popSize) already returns a value below popSize, so this
-// holds for any implementation that returns a drawn index at all -- including
-// one that picks the worst, or draws the wrong number of times. The real
-// coverage is "tournament selection returns the fittest drawn candidate" and
+// SUBSUMED by "tournament selection returns the fittest drawn candidate" and
 // "tournament selection draws exactly tournamentSize candidates".
 TEST_CASE("tournament selection returns an in-range index", "[operators]") {
     const vrp::Problem problem = vrp::Problem::defaultInstance();
@@ -422,7 +395,6 @@ TEST_CASE("tournament selection favours fitter individuals", "[operators]") {
     auto exec = vrp::makeExecutor(1);
     const vrp::Population pop(1000, problem, 13, *exec);
 
-    // Mean fitness of tournament winners must beat the population mean.
     double populationMean = 0.0;
     for (std::size_t i = 0; i < pop.size(); ++i) {
         populationMean += pop.fitness(i);
@@ -441,9 +413,7 @@ TEST_CASE("tournament selection favours fitter individuals", "[operators]") {
 }
 
 // A winner-beats-the-mean check survives an off-by-one in the draw count: four
-// draws still beat the mean. Pin the count by consuming the same number of
-// below() values from a mirror generator and requiring the two generators to
-// be left in the same state.
+// draws still beat the mean. A mirror generator pins the count instead.
 TEST_CASE("tournament selection draws exactly tournamentSize candidates",
           "[operators]") {
     const vrp::Problem problem = vrp::Problem::defaultInstance();
@@ -522,8 +492,6 @@ TEST_CASE("tournament selection treats size zero as a single draw", "[operators]
     }
 }
 
-// Stronger tournaments must select harder. This is independent of the mirror
-// replays above: it reads only the operator's observable selection pressure.
 TEST_CASE("larger tournaments select more aggressively", "[operators]") {
     const vrp::Problem problem = vrp::Problem::defaultInstance();
     auto exec = vrp::makeExecutor(1);
@@ -543,13 +511,9 @@ TEST_CASE("larger tournaments select more aggressively", "[operators]") {
     REQUIRE(meanWinner(2) < meanWinner(1));
 }
 
-// Task 7 seeds one generator per work item, so an operator that quietly changes
-// how many draws it takes shifts every downstream stream position without
-// changing any single offspring in a way these tests would otherwise notice.
-// replaySegment mirrors only the FIRST two draws, so a spurious third draw
-// appended here would pass every other crossover case in this file, the
-// reference oracle included. Pin the count directly: run a mirror generator
-// forward by the expected draws and require both to be at the same position.
+// Per-item seeding makes the draw count part of the operator's interface, and
+// replaySegment mirrors only the first two draws -- a spurious third would pass
+// every other crossover case here, the reference oracle included.
 TEST_CASE("crossover consumes exactly two segment draws", "[operators]") {
     constexpr std::size_t kN = 19;
     const auto n32 = static_cast<std::uint32_t>(kN);
@@ -574,10 +538,8 @@ TEST_CASE("crossover consumes exactly two segment draws", "[operators]") {
     }
 }
 
-// Same pin for mutation, across both of its paths: one unit() draw when the
-// rate declines, that plus two below() draws when it fires. The branch taken is
-// cross-checked against the mirror's own draw, so this also pins that the
-// decision is `unit() < rate` rather than something merely correlated with it.
+// Same pin for mutation, across both paths. The branch taken is cross-checked
+// against the mirror's own draw, so it also pins the decision as `unit() < rate`.
 TEST_CASE("mutation consumes one draw when it declines and three when it fires",
           "[operators]") {
     constexpr std::size_t kN = 19;
@@ -613,9 +575,8 @@ TEST_CASE("mutation consumes one draw when it declines and three when it fires",
     REQUIRE(fires > 0);
 }
 
-// The short-route early return must consume nothing at all. This is the one
-// asymmetry in the operator's stream footprint, and the only thing keeping it
-// invisible is that every route in a population is currently the same length.
+// The one asymmetry in the operator's stream footprint: it stays invisible only
+// because every route in a population is currently the same length.
 TEST_CASE("mutation consumes no draws on a route shorter than two", "[operators]") {
     for (std::uint64_t seed = 0; seed < 200; ++seed) {
         std::vector<int> single{1};
@@ -632,8 +593,7 @@ TEST_CASE("mutation consumes no draws on a route shorter than two", "[operators]
     }
 }
 
-// n == 1 forces below(1) == 0 twice, so low == high == 0: the segment is the
-// whole route and the fill loop finds nothing to place.
+// n == 1 forces low == high == 0: the segment is the whole route.
 TEST_CASE("crossover of a single-gene route reproduces that gene", "[operators]") {
     const std::vector<int> p1{1};
     const std::vector<int> p2{1};

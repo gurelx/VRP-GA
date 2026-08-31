@@ -30,21 +30,15 @@ vrp::GaParams smallParams() {
     return params;
 }
 
-// A six-point instance that is emphatically not Problem::defaultInstance():
-// five customers rather than nineteen, and different coordinates. Every other
-// test in this suite -- and, at the time of writing, every other Problem
-// anywhere in the test tree -- uses the default instance, which would let a
-// run() that ignored the Problem it was handed and built its own default go
-// entirely unnoticed.
+// Deliberately not Problem::defaultInstance(): every other case here uses the
+// default, which would let a run() that built its own default go unnoticed.
 vrp::Problem customProblem() {
     return vrp::Problem(std::vector<vrp::Point>{
         {0, 0}, {10, 0}, {10, 10}, {0, 10}, {20, 5}, {30, 30}});
 }
 
-// The exhaustive best over all 5! tours. Five customers is small enough to
-// state the answer outright instead of asserting a property of it, and the
-// answer is derived from the instance's own geometry rather than from anything
-// the solver produced.
+// The exhaustive best over all 5! tours, derived from the instance's geometry
+// rather than from anything the solver produced.
 double bruteForceOptimum(const vrp::Problem& problem) {
     std::vector<int> route(problem.customerCount());
     std::iota(route.begin(), route.end(), 1);
@@ -55,9 +49,6 @@ double bruteForceOptimum(const vrp::Problem& problem) {
     return best;
 }
 
-// Forwards every call to a real executor and records how it was driven.
-// Executor is an abstract base, so this needs nothing from the library beyond
-// the interface itself.
 class CountingExecutor final : public vrp::Executor {
 public:
     explicit CountingExecutor(std::unique_ptr<vrp::Executor> inner)
@@ -77,11 +68,8 @@ private:
     std::vector<std::size_t> itemCounts_;
 };
 
-// `Trace`, `referenceTrace` and `kindName` live in SolverTrace.hpp, shared with
-// tests/test_determinism.cpp, which uses the same oracle as the serial
-// reference for its threaded runs. `solverTrace` stays here: this file drives a
-// caller-owned Solver, so that "running the same solver twice reproduces the
-// run" can issue two runs against one instance and its carried scratch.
+// solverTrace stays here rather than in SolverTrace.hpp: this file drives a
+// caller-owned Solver, so two runs can share one instance and its scratch.
 Trace solverTrace(vrp::Solver& solver) {
     Trace trace;
     const vrp::RunResult result =
@@ -97,13 +85,8 @@ Trace solverTrace(vrp::Solver& solver) {
 
 }  // namespace
 
-// SUBSUMED. Every index into the population holds a valid permutation, so this
-// catches no index error and no loop-count error; it only rules out a garbage
-// or empty route. What actually covers the returned route is "solver reproduces
-// a hand-run generation loop" (exact equality against an independent oracle)
-// and "zero generations returns the initial best". Kept because the brief
-// specifies it and it is the one case that fails loudly if run() returns a
-// default-constructed RunResult.
+// SUBSUMED by "solver reproduces a hand-run generation loop"; kept as the one
+// case that fails loudly if run() returns a default-constructed RunResult.
 TEST_CASE("solver returns a valid best route", "[solver]") {
     const vrp::Problem problem = vrp::Problem::defaultInstance();
     const vrp::GaParams params = smallParams();
@@ -149,31 +132,23 @@ TEST_CASE("the progress callback fires once per generation", "[solver]") {
     REQUIRE(generations.back() == params.generations - 1);
     REQUIRE(result.generationsRun == params.generations);
 
-    // Ties generationsRun to the number of iterations that were actually
-    // observed to happen, rather than letting it restate the request.
+    // Ties generationsRun to the iterations actually observed, rather than
+    // letting it restate the request.
     REQUIRE(generations.size() == result.generationsRun);
 
-    // 0, 1, ... N-1 with nothing skipped or repeated.
     for (std::size_t i = 0; i < generations.size(); ++i) {
         REQUIRE(generations[i] == i);
     }
 
-    // Ties the last report to the returned answer. Weak on its own, and
-    // deliberately not credited with more than it does: under steady-state the
-    // incumbent best is flat across the late generations, so a report shifted
-    // by one generation still has a matching back(). The mutation run bears
-    // this out -- a callback fired before the step instead of after survives
-    // this line and dies only on the Trace comparison below.
+    // Weak on its own: under steady-state the incumbent best is flat across the
+    // late generations, so a report shifted by one still matches here and dies
+    // only on the Trace comparison below.
     REQUIRE(reported.back() == result.bestDistance);
 }
 
-// SUBSUMED, and weaker than it looks. Monotonicity is GenerationalStrategy's
-// elitism invariant, established in Task 7 -- this restates it through Solver
-// rather than testing Solver. It holds for a sequence shifted by one, for a
-// report issued before the step, and even for fitness(0) in place of
-// fitness(bestIndex()), since slot 0 is where the elite is written. It killed
-// none of the ten mutants. The Trace comparison is what covers the reported
-// sequence.
+// SUBSUMED by "solver reproduces a hand-run generation loop": monotonicity is
+// GenerationalStrategy's elitism invariant, owned by test_strategies.cpp, and
+// holds for a sequence shifted by one or reported before the step.
 TEST_CASE("reported progress never worsens", "[solver]") {
     const vrp::Problem problem = vrp::Problem::defaultInstance();
     vrp::Solver solver(problem, smallParams(),
@@ -196,10 +171,8 @@ TEST_CASE("solver reproduces a hand-run generation loop", "[solver]") {
         INFO("strategy = " << kindName(kind));
         const Trace expected = referenceTrace(problem, params, kind);
 
-        // This comparison can only detect a report shifted by one generation if
-        // the incumbent best actually moves during the run, so check that it
-        // does rather than assuming it: if every reported value were equal, a
-        // shifted sequence would compare equal too.
+        // A shifted report is only detectable if the incumbent best actually
+        // moves during the run, so check that it does rather than assuming it.
         REQUIRE(expected.best.front() != expected.best.back());
 
         vrp::Solver solver(problem, params, vrp::makeStrategy(kind), vrp::makeExecutor(1));
@@ -214,9 +187,8 @@ TEST_CASE("solver reproduces a hand-run generation loop", "[solver]") {
 }
 
 TEST_CASE("solver evaluates against the problem it was handed", "[solver]") {
-    // Wiring test for the Problem reference. A run() that ignored problem_ and
-    // constructed a default instance of its own passes every other case in
-    // this file, because every other case hands it the default instance.
+    // Wiring test for the Problem reference: a run() that ignored problem_ and
+    // built its own default passes every other case in this file.
     const vrp::Problem problem = customProblem();
     REQUIRE(problem.customerCount() == 5);
     REQUIRE(problem.customerCount() != vrp::Problem::defaultInstance().customerCount());
@@ -231,15 +203,11 @@ TEST_CASE("solver evaluates against the problem it was handed", "[solver]") {
                        vrp::makeExecutor(1));
     const vrp::RunResult result = solver.run();
 
-    // The route's shape follows this instance's customer count, not the
-    // default's nineteen.
     REQUIRE(result.bestRoute.size() == 5);
     std::vector<int> sorted = result.bestRoute;
     std::sort(sorted.begin(), sorted.end());
     REQUIRE(sorted == std::vector<int>{1, 2, 3, 4, 5});
 
-    // And the distance comes from this instance's geometry, not the default's:
-    // the same five genes score differently under the two.
     REQUIRE(result.bestDistance == problem.routeDistance(result.bestRoute));
     REQUIRE(result.bestDistance == bruteForceOptimum(problem));
     REQUIRE(result.bestDistance !=
@@ -247,10 +215,8 @@ TEST_CASE("solver evaluates against the problem it was handed", "[solver]") {
 }
 
 TEST_CASE("solver schedules through the executor it was handed", "[solver]") {
-    // Wiring test for the Executor. A run() that ignored executor_ and used a
-    // local SerialExecutor would return identical numbers -- results are
-    // thread-count independent by design, which is the whole point of Task 9 --
-    // so the only observable difference is whether this object was driven.
+    // Wiring test for the Executor: results are thread-count independent by
+    // design, so whether this object was driven is the only observable.
     const vrp::Problem problem = vrp::Problem::defaultInstance();
     vrp::GaParams params;
     params.populationSize = 64;
@@ -276,9 +242,8 @@ TEST_CASE("solver schedules through the executor it was handed", "[solver]") {
     }
 
     SECTION("steady-state drives it only for the population") {
-        // Not an accident worth preserving by luck: SteadyStateStrategy is
-        // inherently serial and documents that it never touches the executor,
-        // so the single call is the population constructor's.
+        // The single call is the population constructor's; steady-state never
+        // schedules.
         auto spy = std::make_unique<CountingExecutor>(vrp::makeExecutor(1));
         const CountingExecutor* observer = spy.get();
         vrp::Solver solver(problem, params,
@@ -293,10 +258,9 @@ TEST_CASE("solver schedules through the executor it was handed", "[solver]") {
 }
 
 TEST_CASE("running the same solver twice reproduces the run", "[solver]") {
-    // Both strategies keep scratch between step() calls -- next_, order_,
-    // child_, seen_ -- so a second run() begins against a dirty strategy
-    // object. It has to match both the first run and a run from a fresh
-    // strategy; matching only itself would still hide carried-over state.
+    // Both strategies keep scratch between step() calls, so a second run()
+    // begins against a dirty strategy. It has to match both the first run and a
+    // run from a fresh strategy; matching only itself would hide carried state.
     const vrp::Problem problem = vrp::Problem::defaultInstance();
     const vrp::GaParams params = smallParams();
 
@@ -334,7 +298,7 @@ TEST_CASE("zero generations returns the initial best", "[solver]") {
     REQUIRE(result.bestRoute.size() == problem.customerCount());
 
     // Not a default-constructed result: it is the best of the population the
-    // seed produced, which is exactly what evolving nothing should yield.
+    // seed produced.
     const Trace expected = referenceTrace(problem, params, vrp::StrategyKind::Generational);
     REQUIRE(result.bestRoute == expected.bestRoute);
     REQUIRE(result.bestDistance == expected.bestDistance);
@@ -342,11 +306,8 @@ TEST_CASE("zero generations returns the initial best", "[solver]") {
     REQUIRE(result.bestDistance > 0.0);
 }
 
-// SUBSUMED, and cannot fail: elapsedSeconds is a duration between two reads of
-// a monotonic clock, so it is >= 0 for every implementation including one that
-// times nothing at all. Both timing mutants pass it. The two tests below are
-// what actually pin the measured interval. Retained only because the brief
-// specifies it.
+// SUBSUMED by the two cases below, and cannot fail: elapsedSeconds >= 0 holds
+// even for an implementation that times nothing.
 TEST_CASE("elapsed time is recorded", "[solver]") {
     const vrp::Problem problem = vrp::Problem::defaultInstance();
     vrp::Solver solver(problem, smallParams(),
@@ -357,19 +318,10 @@ TEST_CASE("elapsed time is recorded", "[solver]") {
 }
 
 TEST_CASE("elapsed time covers the initial population", "[solver]") {
-    // Self-calibrating rather than threshold-based: the solver's interval is
-    // nested inside the one measured here, so it can never be longer, and with
-    // no generations to run, the population construction is the whole of what
-    // it should be timing. A clock started after that construction reports
-    // near zero against a wall time of tens of milliseconds.
-    //
-    // The population is large because this test is thinnest in a release
-    // build, where the construction is the only thing standing between the two
-    // clock reads: at 50000 individuals it runs in ~2.4 ms optimised, so a
-    // preemption in the microseconds outside the solver's own interval could
-    // move the ratio materially. 400000 costs ~20 ms optimised and ~250 ms
-    // unoptimised, an order of magnitude more headroom. Widen the margin here
-    // rather than lowering the ratio, which would blunt the test everywhere.
+    // Self-calibrating: the solver's interval is nested inside the wall time
+    // measured here, and with no generations the population construction is all
+    // of it. The population is deliberately huge -- shrinking it leaves too
+    // little between the two clock reads for the ratio to hold in Release.
     const vrp::Problem problem = vrp::Problem::defaultInstance();
     vrp::GaParams params;
     params.populationSize = 400000;
@@ -390,9 +342,8 @@ TEST_CASE("elapsed time covers the initial population", "[solver]") {
 }
 
 TEST_CASE("elapsed time covers the generation loop", "[solver]") {
-    // The mirror of the test above: a tiny population and a callback that
-    // sleeps, so the loop is nearly all of the wall time. A clock stopped
-    // before the loop, or started after it, reports a small fraction of it.
+    // The mirror of the case above: a tiny population and a sleeping callback,
+    // so the loop is nearly all of the wall time.
     const vrp::Problem problem = vrp::Problem::defaultInstance();
     vrp::GaParams params;
     params.populationSize = 100;

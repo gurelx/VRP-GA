@@ -31,7 +31,6 @@ void Reporter::onResult(const RunResult& result) const {
         out_ << location << " -> ";
     }
     out_ << "depot\n";
-    // "Best found", not proven optimal -- this is a stochastic heuristic.
     out_ << "Best distance:  " << result.bestDistance << '\n';
     out_ << "Generations:    " << result.generationsRun << '\n';
     out_ << "Elapsed:        " << result.elapsedSeconds << " s\n";

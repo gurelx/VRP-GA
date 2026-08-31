@@ -5,12 +5,8 @@
 
 namespace vrp {
 
-// Domain tag for initial-population seeding. The separation is structural, not
-// merely a matter of picking a large number: mixSeed folds in `a + 1`, which
-// wraps to zero only for a == 2^64-1. kInitDomain is therefore the unique domain
-// whose term vanishes, and since kGolden is odd, every other domain (i.e. every
-// generation index) contributes a non-zero term. Initialisation cannot collide
-// with any generation, including generation 0.
+// Domain tag for initial-population seeding: mixSeed folds in `a + 1`, so this
+// is the one domain whose term vanishes and it cannot collide with a generation.
 inline constexpr std::uint64_t kInitDomain = 0xFFFFFFFFFFFFFFFFULL;
 
 std::uint64_t splitmix64(std::uint64_t& state) noexcept;
@@ -19,17 +15,14 @@ std::uint64_t splitmix64(std::uint64_t& state) noexcept;
 // mixSeed(seed, kInitDomain, itemIndex) or mixSeed(seed, generation, itemIndex).
 std::uint64_t mixSeed(std::uint64_t base, std::uint64_t a, std::uint64_t b) noexcept;
 
-// xoshiro256** — four words of state, cheap to construct, which is what makes
-// per-work-item seeding affordable.
+// xoshiro256**: cheap to construct, which is what makes per-work-item seeding
+// affordable.
 class Rng {
 public:
     explicit Rng(std::uint64_t seed) noexcept;
 
-    // Adopts raw generator words. The all-zero state is xoshiro's fixed point
-    // -- it would emit 0 forever -- so it is silently replaced with a fixed
-    // non-zero state rather than honoured. fromState({}) therefore does NOT
-    // round-trip: it yields a working generator, not a zero one. Every other
-    // state is adopted verbatim.
+    // Adopts raw generator words, except the all-zero state -- xoshiro's fixed
+    // point -- which is replaced, so fromState({}) does not round-trip.
     static Rng fromState(std::array<std::uint64_t, 4> state) noexcept;
 
     std::uint64_t next() noexcept;

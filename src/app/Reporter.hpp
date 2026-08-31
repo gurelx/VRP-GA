@@ -7,19 +7,14 @@
 
 namespace vrp::app {
 
-// Prints progress on a fixed interval and always on the final generation --
-// the original code reported every tenth generation and so never printed the
-// last one.
-//
-// Kept deliberately cheap: Solver::elapsedSeconds is measured with the
-// progress callback inside the timed region, so a chatty reporter inflates the
-// runtime it is reporting.
+// Prints on a fixed interval and always on the final generation. Kept cheap:
+// the progress callback runs inside Solver's timed region, so a chatty reporter
+// inflates the runtime it reports.
 class Reporter {
 public:
     Reporter(std::ostream& out, std::size_t generations, std::size_t interval, bool quiet);
 
-    // `generation` is the 0-based index Solver reports; the printed number is
-    // 1-based, so a 50-generation run ends at "Generation 50".
+    // `generation` is Solver's 0-based index; the printed number is 1-based.
     void onGeneration(std::size_t generation, double bestDistance) const;
     void onResult(const RunResult& result) const;
 

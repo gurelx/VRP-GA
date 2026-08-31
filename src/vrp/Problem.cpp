@@ -9,9 +9,6 @@ namespace {
 
 constexpr std::size_t kDepot = 0;
 
-// Route genes are ints to match the GA's chromosome representation, but they
-// are location indices. distance() asserts the upper bound against the
-// location count; this only has to rule out a negative gene.
 std::size_t toIndex(int gene) noexcept {
     assert(gene >= 0);
     return static_cast<std::size_t>(gene);

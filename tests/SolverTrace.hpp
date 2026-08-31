@@ -1,32 +1,12 @@
 #pragma once
 
-// Shared test support for tests/test_solver.cpp and tests/test_determinism.cpp.
-//
-// These three helpers were byte-identical copies in both files. The copies were
-// kept deliberately at first -- so that one edit could not silently retune both
-// files' oracles at once -- but the price was that they could drift apart
-// unnoticed, and a drifted oracle is worse than a shared one: the two files
-// would then be comparing against subtly different definitions of "the same
-// run" while still reading as though they agreed. They are shared here instead,
-// and the hazard the old comments described no longer exists.
-//
-// WHAT THIS FILE IS, AND IS NOT. referenceTrace() is a DIFFERENTIAL oracle. It
-// calls the same Population constructor and the same EvolutionStrategy::step as
-// the code under test, so it can only detect defects that live in Solver's own
-// generation loop -- an off-by-one, a report issued before the step instead of
-// after, the wrong generation index handed to the strategy. It is NOT an
-// independent computation of the specified answer, and no test may cite it as
-// evidence that the specified seed derivation is the one implemented. That
-// claim belongs to the per-slot oracles in tests/test_population.cpp and
-// tests/test_strategies.cpp, which replay mixSeed and the operator sequence by
-// hand. A wrong-but-consistent implementation passes everything built on this
-// header.
-//
-// Because both suites now share these definitions, a change here retunes both
-// at once. That is the intended trade -- but check both call sites before
-// editing: test_solver.cpp uses it at one thread as Solver's loop oracle, and
-// test_determinism.cpp uses it as the serial reference that threaded runs must
-// reproduce.
+// referenceTrace() is a DIFFERENTIAL oracle: it calls the same Population
+// constructor and the same EvolutionStrategy::step as the code under test, so
+// it can only catch defects in Solver's own generation loop. A
+// wrong-but-consistent implementation passes it; conformance to the specified
+// seed derivation is pinned by tests/test_population.cpp and
+// tests/test_strategies.cpp. Shared by test_solver.cpp and
+// test_determinism.cpp, so an edit here retunes both suites.
 
 #include <cstddef>
 #include <span>
@@ -40,11 +20,8 @@
 
 namespace vrp_test {
 
-// Everything one run can be observed to produce, so a comparison covers the
-// whole contract rather than the one field a mutant happened to leave alone.
-// The per-generation `best` sequence is the only window Solver offers onto the
-// intermediate populations: a run that diverged at generation 3 and reconverged
-// by the last generation agrees on bestRoute and dies on `best`.
+// The per-generation `best` sequence is the only window onto the intermediate
+// populations: a divergence that reconverges is invisible in bestRoute alone.
 struct Trace {
     std::vector<std::size_t> generations;  // as reported to the callback
     std::vector<double> best;              // best distance as reported, per generation
@@ -57,14 +34,8 @@ inline const char* kindName(vrp::StrategyKind kind) {
     return kind == vrp::StrategyKind::SteadyState ? "steady-state" : "generational";
 }
 
-// A hand-run generation loop, kept separate from Solver's own: build the
-// population from the seed, apply the strategy exactly `generations` times, and
-// record the incumbent best AFTER each step. A loop that steps once too often
-// or too few times, one that reports before stepping instead of after, or one
-// that hands the strategy the wrong generation index all diverge from this.
-//
-// Always runs at one thread. Callers that want a thread-count comparison drive
-// Solver at N threads and compare against this.
+// A hand-run generation loop, kept separate from Solver's own, recording the
+// incumbent best AFTER each step. Always runs at one thread.
 inline Trace referenceTrace(const vrp::Problem& problem, const vrp::GaParams& params,
                             vrp::StrategyKind kind) {
     auto executor = vrp::makeExecutor(1);
