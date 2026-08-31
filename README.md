@@ -9,8 +9,7 @@ produces the same route regardless of how many threads the run used.
 
 > **Scope:** the model uses one vehicle, one depot, and Euclidean distances. It
 > is a Traveling Salesman Problem (TSP) formulation within the broader
-> vehicle-routing domain. Vehicle capacities, multiple vehicles, and time
-> windows are **not** implemented.
+> vehicle-routing domain. 
 
 ## Highlights
 
@@ -119,19 +118,6 @@ generation loop does not parallelise. Use --strategy generational to
 see a speedup from --threads.
 ```
 
-On Linux and macOS the executable is at `build/release/src/vrp_ga`; the CMake
-commands above are identical on every platform.
-
-**On Windows, run the binaries from a shell whose `PATH` has the compiler's
-`bin` directory first.** Both `vrp_ga.exe` and `vrp_tests.exe` link
-`libstdc++-6.dll`, `libgcc_s_seh-1.dll` and `libwinpthread-1.dll` dynamically.
-`ctest` is insulated — `tests/CMakeLists.txt` passes the compiler directory to
-`catch_discover_tests` via `DL_PATHS` — but every **direct** invocation in this
-README depends on the ambient `PATH`, and a shell that ships its own copies of
-those DLLs (Git Bash and MSYS shells do) will load the wrong ones. PowerShell
-with the toolchain on `PATH` is the configuration everything here was verified
-in.
-
 ## Command-line options
 
 | Flag | Value | Default | Meaning |
@@ -146,22 +132,6 @@ in.
 | `--seed` | `N` | `42` | RNG seed. `0` draws a random one and prints it. |
 | `--quiet` | — | off | Suppress per-generation progress. Use this when timing. |
 | `--help`, `-h` | — | — | Print the message above and exit 0. |
-
-Invalid input is rejected before any work starts, with a message naming the
-flag, and exits with status **2**:
-
-```powershell
-.\build\release\src\vrp_ga.exe --bogus
-```
-
-The message, a blank line, and then the full usage text all go to **stderr**:
-
-```text
-error: unknown option: --bogus
-
-vrp_ga [options]
-...
-```
 
 ## Reading the output
 
@@ -201,113 +171,6 @@ generations replace 100 of 100000 individuals — 0.1% of the population. The
 defaults are inherited from the original program and preserved for continuity;
 they are not a good configuration. For an actual search, use `generational`, or
 give steady-state a generation count on the order of its population size.
-
-## Benchmarking
-
-Vary `--threads` with everything else fixed, and use `--quiet` — console I/O
-happens inside the timed region and will otherwise dominate short runs.
-
-Because `--threads` only reaches the `generational` strategy, benchmark that
-one. Steady-state's generation loop never touches the executor, so its runtime
-is flat in the thread count (measured: 0.00233 s at 1 thread, 0.00220 s at 8 —
-the difference is noise, and the only threaded work in it is the one-off
-construction of the initial population).
-
-```powershell
-.\build\release\src\vrp_ga.exe --strategy generational --population 20000 --generations 100 --threads 1 --quiet
-.\build\release\src\vrp_ga.exe --strategy generational --population 20000 --generations 100 --threads 8 --quiet
-```
-
-```text
-Strategy:       generational
-Threads:        1
-Seed:           42
-
-Best route found: depot -> 1 -> 17 -> 5 -> 16 -> 15 -> 18 -> 2 -> 6 -> 19 -> 14 -> 7 -> 13 -> 12 -> 11 -> 10 -> 8 -> 9 -> 3 -> 4 -> depot
-Best distance:  52.8269
-Generations:    100
-Elapsed:        0.269228 s
-
-Strategy:       generational
-Threads:        8
-Seed:           42
-
-Best route found: depot -> 1 -> 17 -> 5 -> 16 -> 15 -> 18 -> 2 -> 6 -> 19 -> 14 -> 7 -> 13 -> 12 -> 11 -> 10 -> 8 -> 9 -> 3 -> 4 -> depot
-Best distance:  52.8269
-Generations:    100
-Elapsed:        0.0625685 s
-```
-
-**Identical route, identical distance, 4.3× less time.** That is the intended
-and tested behaviour, not a coincidence of this seed.
-
-A sweep over the same configuration. These are **separate runs** from the pair
-above, so the 8-thread ratio here is 3.97× rather than that pair's 4.30×; the
-difference is run-to-run variance, not a change in configuration:
-
-| `--threads` | Best distance | Elapsed | Speedup |
-| --- | --- | --- | --- |
-| 1 | 52.8269 | 0.2606 s | 1.00× |
-| 2 | 52.8269 | 0.1634 s | 1.60× |
-| 4 | 52.8269 | 0.1013 s | 2.57× |
-| 8 | 52.8269 | 0.0657 s | 3.97× |
-| 16 | 52.8269 | 0.0438 s | 5.95× |
-
-Measured on an AMD Ryzen 9 9900X (12 cores, 24 threads) with GCC 16.1
-(MinGW-w64 UCRT), one run per row; times vary a few percent between runs, and
-the distances are exact across all of them.
-
-The 16-thread row exceeds the 12 physical cores, so part of its 5.95× comes from
-simultaneous multithreading rather than additional cores — expect the returns
-past 12 threads to be smaller than the row alone suggests.
-
-## Determinism, and what the tests actually establish
-
-Every work item is seeded from `mixSeed(seed, generation, item)` rather than
-from a shared generator, so the value each individual receives depends on *its
-own index*, not on which thread or chunk processed it. The chunk boundaries
-therefore drop out of the result.
-
-Being precise about the evidence, because these are three different claims:
-
-- **Threading does not change the result.** This is directly tested. The
-  determinism suite compares whole populations — all 512 individuals, routes
-  and fitness — across 1, 2, 4 and 8 threads, plus the entire per-generation
-  progress trace, so a divergence at an intermediate generation that later
-  washes out of the winner is still caught. Comparisons are exact `==` on
-  doubles by design; a tolerance would hide what they exist to find.
-
-- **Conformance to the specified seeding is a separate claim, established
-  elsewhere.** The determinism suite is *differential*: it runs the same
-  library code twice and compares. An implementation that is wrong but
-  consistent across thread counts passes all of it. What rules that out are the
-  per-slot oracles in `tests/test_population.cpp` and `tests/test_strategies.cpp`
-  — but they are independent to different degrees, and the difference matters:
-
-  - `test_population.cpp` re-implements the initial shuffle outright. It
-    hand-rolls the backward Fisher-Yates loop and calls only `mixSeed` and
-    `Rng`, never `Population`'s own shuffle, so it genuinely pins the domain
-    tag, the item index and the shuffle direction against an independent
-    computation.
-  - `test_strategies.cpp`'s `expectedOffspring` is independent of
-    `Strategy.cpp` but calls the library's own `tournamentSelect`,
-    `orderCrossover` and `swapMutate`. It therefore pins the *composition* —
-    the per-slot seed, the operator order, which parents feed the crossover —
-    and not the operators' internals, which the `[operators]` tests pin
-    separately against mirror generators.
-
-  Do not read a passing determinism suite as evidence that the seeding is the
-  specified one.
-
-- **The thread pool's freedom from data races rests on the test suite alone.**
-  MinGW-w64 UCRT ships no sanitizer runtimes, so ThreadSanitizer,
-  AddressSanitizer and UBSan are all unavailable on this toolchain — there is
-  no dynamic analysis available here at all, and the project therefore defines
-  no sanitizer presets. The suite compensates with repetition rather than
-  detection (ten independent pool lifetimes, 260 `parallelFor` epochs, each
-  required to match a serial reference), but repetition is not proof: a race
-  flakes in the *passing* direction, and ten clean runs are ten interleavings
-  that happened not to lose.
 
 ## Testing
 
@@ -351,73 +214,7 @@ To select by tag, run the test binary directly:
 Tests time out at 60 seconds each, so a wedged thread pool fails by name
 instead of hanging until CTest's 1500-second default.
 
-### Windows path length
-
-On Windows, build this project from a **short source path**. Catch2's build tree
-nests deeply (`build/release/_deps/catch2-build/src/CMakeFiles/Catch2.dir/…`),
-and a long source path pushes generated dependency files past the 260-character
-`MAX_PATH` limit. The failure is unmistakable once you know it:
-
-```text
-fatal error: opening dependency file _deps\catch2-build\src\CMakeFiles\...\*.cpp.obj.d:
-No such file or directory
-```
-
-**Move the checkout closer to the drive root.** That is the remedy, and it is
-the one that was tested: the same clone that failed from a 144-character path
-built and passed all 134 tests from `C:\vrpchk`.
-
-Two things that sound like fixes and are not — one ruled out by construction,
-one tested here:
-
-- **Enabling long paths in Windows and Git does not help** (ruled out by
-  construction, not executed). The registry's `LongPathsEnabled` lifts the limit
-  only for processes whose manifest marks them `longPathAware`, and the
-  MinGW-w64 GCC binaries are not manifested that way, so the setting never
-  reaches the compiler writing the file. The `\\?\` prefix is a *different*
-  route past `MAX_PATH` — a Win32 API convention requiring an absolute path —
-  and the path in the error is relative
-  (`_deps\catch2-build\src\CMakeFiles\…`), so it is not in play either.
-- **`CMAKE_OBJECT_PATH_MAX` only warns** (tested here). Set to 240 — both in
-  `tests/CMakeLists.txt` before `FetchContent_MakeAvailable(Catch2)` and as a
-  `-D` cache entry — CMake reports "The object file directory … is too long"
-  for the Catch2 target and then builds with the long path anyway. The build
-  fails identically, with the same five errors.
-
-## Repository structure
-
-```text
-VRP-GA/
-├── CMakeLists.txt              # Top-level project, options, version
-├── CMakePresets.json           # debug and release presets
-├── cmake/
-│   └── ProjectWarnings.cmake   # The vrp_warnings interface target
-├── include/vrp/                # Public headers for the vrp_core library
-│   ├── Config.hpp              # GaParams, StrategyKind
-│   ├── Executor.hpp            # Executor interface, thread pool, chunking
-│   ├── Operators.hpp           # Selection, crossover, mutation
-│   ├── Population.hpp          # Routes plus their fitness, kept in step
-│   ├── Problem.hpp             # Locations and the distance matrix
-│   ├── Rng.hpp                 # xoshiro256**, mixSeed
-│   ├── Solver.hpp              # Generation loop, RunResult
-│   ├── Strategy.hpp            # EvolutionStrategy interface
-│   └── Version.hpp             # Project identity
-├── src/
-│   ├── CMakeLists.txt          # vrp_core, vrp_app, vrp_ga targets
-│   ├── vrp/                    # vrp_core implementation — performs no I/O
-│   └── app/                    # CLI, reporter, and main()
-├── tests/                      # Catch2 suite, one file per component
-│   ├── CMakeLists.txt          # Fetches Catch2, registers tests
-│   └── SolverTrace.hpp         # Shared oracle for solver and determinism
-├── docs/                       # Design notes and the restructure plan
-└── README.md
-```
-
-The library (`vrp_core`) performs no I/O; all printing lives in `vrp_app`, which
-is a separate static library rather than part of `main.cpp` so that argument
-parsing and output formatting are testable without spawning a subprocess.
-
-## Not implemented
+## Out of Scope
 
 The following are outside the current model, not defects:
 
